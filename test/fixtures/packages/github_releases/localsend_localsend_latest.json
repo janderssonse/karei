@@ -1,0 +1,53 @@
+{
+  "url": "https://api.github.com/repos/localsend/localsend/releases/456789123",
+  "id": 456789123,
+  "tag_name": "v1.13.1",
+  "name": "v1.13.1",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2024-01-10T09:45:00Z",
+  "published_at": "2024-01-10T09:50:00Z",
+  "body": "## Changes\n* Fixed file transfer issues\n* Improved UI responsiveness\n* Added new sharing options\n\n## Download\nChoose the appropriate version for your platform below.\n\n**Full Changelog**: https://github.com/localsend/localsend/compare/v1.13.0...v1.13.1",
+  "assets": [
+    {
+      "url": "https://api.github.com/repos/localsend/localsend/releases/assets/3001",
+      "id": 3001,
+      "name": "LocalSend-1.13.1-linux-x86-64.deb",
+      "size": 15678901,
+      "download_count": 3450,
+      "created_at": "2024-01-10T09:47:00Z",
+      "updated_at": "2024-01-10T09:47:00Z",
+      "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.13.1/LocalSend-1.13.1-linux-x86-64.deb"
+    },
+    {
+      "url": "https://api.github.com/repos/localsend/localsend/releases/assets/3002",
+      "id": 3002,
+      "name": "LocalSend-1.13.1-linux-x86-64.AppImage",
+      "size": 23456789,
+      "download_count": 2890,
+      "created_at": "2024-01-10T09:47:00Z",
+      "updated_at": "2024-01-10T09:47:00Z",
+      "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.13.1/LocalSend-1.13.1-linux-x86-64.AppImage"
+    },
+    {
+      "url": "https://api.github.com/repos/localsend/localsend/releases/assets/3003",
+      "id": 3003,
+      "name": "LocalSend-1.13.1.dmg",
+      "size": 18901234,
+      "download_count": 1670,
+      "created_at": "2024-01-10T09:47:00Z",
+      "updated_at": "2024-01-10T09:47:00Z",
+      "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.13.1/LocalSend-1.13.1.dmg"
+    },
+    {
+      "url": "https://api.github.com/repos/localsend/localsend/releases/assets/3004",
+      "id": 3004,
+      "name": "LocalSend-1.13.1-windows-x86-64.exe",
+      "size": 17234567,
+      "download_count": 4560,
+      "created_at": "2024-01-10T09:47:00Z",
+      "updated_at": "2024-01-10T09:47:00Z",
+      "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.13.1/LocalSend-1.13.1-windows-x86-64.exe"
+    }
+  ]
+}

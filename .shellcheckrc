@@ -1,0 +1,23 @@
+# ShellCheck configuration for Karei
+# Modern bash practices for Ubuntu 24.04+
+
+# Exclude specific checks that don't apply to our use case
+disable=SC1090  # Can't follow non-constant source (dynamic sourcing is intentional)
+disable=SC1091  # Don't follow sourced files (we source utils from multiple places)
+disable=SC2034  # Unused variables (many are exported for subshells)
+disable=SC2155  # Declare and assign separately (acceptable style in system checks)
+disable=SC2004  # Arithmetic variable expansion (readable style choice)
+disable=SC2206  # Quote array expansion (font glob patterns are intentional)
+disable=SC1078  # Single quoted string issues (complex fish command patterns)
+disable=SC1079  # End quote issues (complex fish command patterns)
+disable=SC2026  # Word outside quotes (complex fish command patterns)
+disable=SC2086  # Double quote expansion (complex fish command patterns)
+disable=SC2140  # Word form issues (config file format requirements)
+disable=SC2001  # Sed usage (sometimes more readable than parameter expansion)
+disable=SC2154  # Referenced but not assigned (variables from external sources)
+
+# Set shell to bash (default but explicit)
+shell=bash
+
+# External sources (files we source that shellcheck can't find)
+source-path=lib

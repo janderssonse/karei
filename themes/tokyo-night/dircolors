@@ -1,0 +1,244 @@
+# Tokyo Night theme for dircolors
+# Based on Tokyo Night color palette
+COLOR tty
+
+TERM alacritty
+TERM alacritty-direct
+TERM ansi
+TERM *color*
+TERM con[0-9]*x[0-9]*
+TERM cons25
+TERM console
+TERM cygwin
+TERM dtterm
+TERM dvtm
+TERM dvtm-256color
+TERM Eterm
+TERM eterm-color
+TERM fbterm
+TERM gnome
+TERM gnome-256color
+TERM hurd
+TERM jfbterm
+TERM konsole
+TERM konsole-256color
+TERM kterm
+TERM linux
+TERM linux-c
+TERM mlterm
+TERM putty
+TERM putty-256color
+TERM rxvt*
+TERM rxvt-unicode
+TERM rxvt-256color
+TERM rxvt-unicode256
+TERM screen*
+TERM screen-256color
+TERM st
+TERM st-256color
+TERM terminator
+TERM tmux*
+TERM tmux-256color
+TERM vt100
+TERM xterm*
+TERM xterm-color
+TERM xterm-88color
+TERM xterm-256color
+TERM xterm-kitty
+
+# Global Defaults
+NORMAL 00
+RESET 0
+
+FILE 00
+DIR 01;38;5;111           # Tokyo Night blue
+LINK 38;5;158             # Tokyo Night green
+MULTIHARDLINK 04;38;5;158
+
+FIFO 04;01;38;5;158
+SOCK 04;38;5;180
+DOOR 04;01;38;5;158
+BLK 01;38;5;180
+CHR 38;5;180
+
+ORPHAN 38;5;203           # Tokyo Night red
+MISSING 01;37;41
+
+EXEC 01;38;5;158          # Tokyo Night green
+
+SETUID 01;04;37
+SETGID 01;04;37
+CAPABILITY 01;37
+
+STICKY_OTHER_WRITABLE 01;37;44
+OTHER_WRITABLE 01;04;38;5;111
+STICKY 04;37;44
+
+# Extension Patterns
+# Archives
+.7z 01;38;5;203
+.ace 01;38;5;203
+.alz 01;38;5;203
+.arc 01;38;5;203
+.arj 01;38;5;203
+.bz 01;38;5;203
+.bz2 01;38;5;203
+.cab 01;38;5;203
+.cpio 01;38;5;203
+.deb 01;38;5;203
+.dz 01;38;5;203
+.ear 01;38;5;203
+.gz 01;38;5;203
+.jar 01;38;5;203
+.lha 01;38;5;203
+.lrz 01;38;5;203
+.lz 01;38;5;203
+.lz4 01;38;5;203
+.lzh 01;38;5;203
+.lzma 01;38;5;203
+.lzo 01;38;5;203
+.rar 01;38;5;203
+.rpm 01;38;5;203
+.rz 01;38;5;203
+.sar 01;38;5;203
+.t7z 01;38;5;203
+.tar 01;38;5;203
+.taz 01;38;5;203
+.tbz 01;38;5;203
+.tbz2 01;38;5;203
+.tgz 01;38;5;203
+.tlz 01;38;5;203
+.txz 01;38;5;203
+.tz 01;38;5;203
+.tzo 01;38;5;203
+.tzst 01;38;5;203
+.war 01;38;5;203
+.xz 01;38;5;203
+.z 01;38;5;203
+.Z 01;38;5;203
+.zip 01;38;5;203
+.zoo 01;38;5;203
+.zst 01;38;5;203
+
+# Audio
+.aac 38;5;180
+.au 38;5;180
+.flac 38;5;180
+.m4a 38;5;180
+.mid 38;5;180
+.midi 38;5;180
+.mka 38;5;180
+.mp3 38;5;180
+.mpa 38;5;180
+.mpeg 38;5;180
+.mpg 38;5;180
+.ogg 38;5;180
+.opus 38;5;180
+.ra 38;5;180
+.wav 38;5;180
+
+# Customs
+.3des 01;38;5;170
+.aes 01;38;5;170
+.gpg 01;38;5;170
+.pgp 01;38;5;170
+
+# Documents
+.doc 38;5;180
+.docx 38;5;180
+.dot 38;5;180
+.odg 38;5;180
+.odp 38;5;180
+.ods 38;5;180
+.odt 38;5;180
+.otg 38;5;180
+.otp 38;5;180
+.ots 38;5;180
+.ott 38;5;180
+.pdf 38;5;180
+.ppt 38;5;180
+.pptx 38;5;180
+.xls 38;5;180
+.xlsx 38;5;180
+
+# Executables
+.app 01;38;5;158
+.bat 01;38;5;158
+.btm 01;38;5;158
+.cmd 01;38;5;158
+.com 01;38;5;158
+.exe 01;38;5;158
+.reg 01;38;5;158
+
+# Ignores
+*~ 02;37
+.bak 02;37
+.BAK 02;37
+.log 02;37
+.old 02;37
+.OLD 02;37
+.orig 02;37
+.ORIG 02;37
+.swo 02;37
+.swp 02;37
+
+# Images
+.bmp 38;5;180
+.cgm 38;5;180
+.dl 38;5;180
+.dvi 38;5;180
+.emf 38;5;180
+.eps 38;5;180
+.gif 38;5;180
+.jpeg 38;5;180
+.jpg 38;5;180
+.JPG 38;5;180
+.mng 38;5;180
+.pbm 38;5;180
+.pcx 38;5;180
+.pgm 38;5;180
+.png 38;5;180
+.PNG 38;5;180
+.ppm 38;5;180
+.pps 38;5;180
+.ppsx 38;5;180
+.ps 38;5;180
+.svg 38;5;180
+.svgz 38;5;180
+.tga 38;5;180
+.tif 38;5;180
+.tiff 38;5;180
+.xbm 38;5;180
+.xcf 38;5;180
+.xpm 38;5;180
+.xwd 38;5;180
+.yuv 38;5;180
+
+# Video
+.anx 38;5;180
+.asf 38;5;180
+.avi 38;5;180
+.axv 38;5;180
+.flc 38;5;180
+.fli 38;5;180
+.flv 38;5;180
+.gl 38;5;180
+.m2v 38;5;180
+.m4v 38;5;180
+.mkv 38;5;180
+.mov 38;5;180
+.MOV 38;5;180
+.mp4 38;5;180
+.mpeg 38;5;180
+.mpg 38;5;180
+.nuv 38;5;180
+.ogm 38;5;180
+.ogv 38;5;180
+.ogx 38;5;180
+.qt 38;5;180
+.rm 38;5;180
+.rmvb 38;5;180
+.swf 38;5;180
+.vob 38;5;180
+.webm 38;5;180
+.wmv 38;5;180

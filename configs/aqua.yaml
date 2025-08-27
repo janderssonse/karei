@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 The Karei Authors
+# SPDX-License-Identifier: CC0-1.0
+# Karei Aqua Configuration
+# Declarative CLI Version Manager for development tools
+# See: https://aquaproj.github.io/docs/
+registries:
+  - type: standard
+    ref: v4.155.1
+packages:
+  # Terminal Multiplexers and Shell Enhancements
+  - name: zellij-org/zellij@v0.40.1
+  - name: starship/starship@v1.19.0
+  # Git Tools
+  - name: jesseduffield/lazygit@v0.43.1
+  - name: jesseduffield/lazydocker@v0.23.3
+  # File Transfer and Utilities
+  - name: localsend/localsend@v1.15.4
+
+# Add more packages as needed through karei install commands
+# Packages will be automatically added here when installed via Aqua

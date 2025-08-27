@@ -1,0 +1,230 @@
+{
+  "packages": {
+    "vim": {
+      "name": "vim",
+      "version": "8.2.4919-1ubuntu1",
+      "description": "Vi IMproved - enhanced vi editor",
+      "size": 2048000,
+      "dependencies": ["vim-common", "vim-runtime", "libacl1", "libc6", "libgpm2"],
+      "architecture": "amd64",
+      "section": "editors",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "neovim": {
+      "name": "neovim",
+      "version": "0.9.5-4ubuntu1",
+      "description": "Hyperextensible Vim-based text editor",
+      "size": 4096000,
+      "dependencies": ["libc6", "libluajit-5.1-2", "libmsgpack-c2", "libtermkey1"],
+      "architecture": "amd64",
+      "section": "editors",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "btop": {
+      "name": "btop",
+      "version": "1.2.13-1",
+      "description": "Modern and colorful command line resource monitor",
+      "size": 1024000,
+      "dependencies": ["libc6", "libgcc-s1", "libstdc++6"],
+      "architecture": "amd64",
+      "section": "admin",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "git": {
+      "name": "git",
+      "version": "2.34.1-1ubuntu1.10",
+      "description": "Fast, scalable, distributed revision control system",
+      "size": 8192000,
+      "dependencies": ["git-man", "libc6", "libcurl3-gnutls", "liberror-perl", "libexpat1"],
+      "architecture": "amd64",
+      "section": "vcs",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "curl": {
+      "name": "curl",
+      "version": "7.81.0-1ubuntu1.15",
+      "description": "Command line tool for transferring data with URL syntax",
+      "size": 512000,
+      "dependencies": ["libc6", "libcurl4", "zlib1g"],
+      "architecture": "amd64",
+      "section": "web",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "wget": {
+      "name": "wget",
+      "version": "1.21.2-2ubuntu1",
+      "description": "Retrieves files from the web",
+      "size": 1024000,
+      "dependencies": ["libc6", "libgnutls30", "libidn2-0", "libnettle8"],
+      "architecture": "amd64",
+      "section": "web",
+      "priority": "standard",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "fish": {
+      "name": "fish",
+      "version": "3.3.1+ds-3",
+      "description": "Friendly interactive shell",
+      "size": 2048000,
+      "dependencies": ["fish-common", "libc6", "libgcc-s1", "libncurses6", "libpcre2-32-0"],
+      "architecture": "amd64",
+      "section": "shells",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "gnome-sushi": {
+      "name": "gnome-sushi",
+      "version": "41.2-1",
+      "description": "Sushi is a quick previewer for Nautilus",
+      "size": 512000,
+      "dependencies": ["gir1.2-webkit2-4.0", "libc6", "libgdk-pixbuf-2.0-0", "libglib2.0-0"],
+      "architecture": "amd64",
+      "section": "gnome",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "gnome-tweaks": {
+      "name": "gnome-tweaks",
+      "version": "42.beta-1",
+      "description": "Tool to adjust advanced configuration settings for GNOME",
+      "size": 1024000,
+      "dependencies": ["gir1.2-gtk-3.0", "python3", "python3-gi"],
+      "architecture": "all",
+      "section": "gnome",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "wl-clipboard": {
+      "name": "wl-clipboard",
+      "version": "2.0.0-1build1",
+      "description": "Command line interface to the wayland clipboard",
+      "size": 256000,
+      "dependencies": ["libc6", "libwayland-client0"],
+      "architecture": "amd64",
+      "section": "utils",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "xournalpp": {
+      "name": "xournalpp",
+      "version": "1.1.1+ds-2build1",
+      "description": "Handwriting notetaking software with PDF annotation support",
+      "size": 4096000,
+      "dependencies": ["libatk1.0-0", "libc6", "libcairo2", "libgdk-pixbuf-2.0-0", "libglib2.0-0"],
+      "architecture": "amd64",
+      "section": "graphics",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "flameshot": {
+      "name": "flameshot",
+      "version": "12.1.0-1build1",
+      "description": "Powerful yet simple-to-use screenshot software",
+      "size": 2048000,
+      "dependencies": ["libc6", "libgcc-s1", "libqt5core5a", "libqt5dbus5", "libqt5gui5"],
+      "architecture": "amd64",
+      "section": "graphics",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "virtualbox": {
+      "name": "virtualbox",
+      "version": "6.1.38-dfsg-3ubuntu1",
+      "description": "x86 virtualization solution - base binaries",
+      "size": 102400000,
+      "dependencies": ["adduser", "iproute2", "libc6", "libcurl4", "libgcc-s1"],
+      "architecture": "amd64",
+      "section": "contrib/misc",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "libreoffice": {
+      "name": "libreoffice",
+      "version": "7.3.7-0ubuntu0.22.04.4",
+      "description": "Office productivity suite (metapackage)",
+      "size": 1024000,
+      "dependencies": ["libreoffice-writer", "libreoffice-calc", "libreoffice-impress", "libreoffice-draw"],
+      "architecture": "amd64",
+      "section": "editors",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "vlc": {
+      "name": "vlc",
+      "version": "3.0.16-1build7",
+      "description": "Multimedia player and streamer",
+      "size": 4096000,
+      "dependencies": ["vlc-bin", "vlc-data", "vlc-l10n", "vlc-plugin-base"],
+      "architecture": "amd64",
+      "section": "video",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "gimp": {
+      "name": "gimp",
+      "version": "2.10.30-1build1",
+      "description": "GNU Image Manipulation Program",
+      "size": 16384000,
+      "dependencies": ["gimp-data", "libatk1.0-0", "libc6", "libcairo-gobject2"],
+      "architecture": "amd64",
+      "section": "graphics",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    },
+    "pinta": {
+      "name": "pinta",
+      "version": "2.0.2-1",
+      "description": "Simple drawing/painting program",
+      "size": 2048000,
+      "dependencies": ["libmono-corlib4.5-cil", "libmono-system4.0-cil", "mono-runtime"],
+      "architecture": "all",
+      "section": "graphics",
+      "priority": "optional",
+      "maintainer": "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+      "available": true
+    }
+  },
+  "repositories": {
+    "main": {
+      "description": "Officially supported packages",
+      "components": ["main"],
+      "enabled": true
+    },
+    "universe": {
+      "description": "Community-maintained packages",
+      "components": ["universe"],
+      "enabled": true
+    },
+    "restricted": {
+      "description": "Restricted copyright packages",
+      "components": ["restricted"],
+      "enabled": true
+    },
+    "multiverse": {
+      "description": "Restricted software",
+      "components": ["multiverse"],
+      "enabled": true
+    }
+  }
+}

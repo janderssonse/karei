@@ -1,0 +1,10 @@
+# Vi mode for Fish shell
+# Rename this file to 15-vi-mode.fish to enable vi keybindings
+# Many developers prefer vi mode for efficient editing
+
+# Enable vi key bindings
+fish_vi_key_bindings
+
+# Set vi as editor preference (optional)
+# set -gx EDITOR vi
+# set -gx VISUAL vi

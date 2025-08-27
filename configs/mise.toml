@@ -1,0 +1,39 @@
+# Mise Configuration for Karei
+# Enhanced security and performance settings
+
+[settings]
+# Disable asdf backend for security and performance
+disable_backends = ["asdf"]
+
+# Enable paranoid mode for extra security
+paranoid = true
+
+# Disable default registry mapping to avoid conflicts
+disable_default_registry = false
+
+# GPG verification for tool signatures when available
+gpg_verify = true
+
+# Disable specific tools if needed (empty by default)
+disable_tools = []
+
+# Log level for debugging if needed
+log_level = "info"
+
+# Experimental features
+experimental = false
+
+# Always keep download cache for faster reinstalls
+always_keep_download = true
+
+# Use system curl for downloads (more secure)
+use_system_curl = true
+
+# Plugin directories (standard locations)
+plugin_dirs = []
+
+# Trusted config paths
+trusted_config_paths = [
+    "~/.config/mise",
+    "/etc/mise"
+]

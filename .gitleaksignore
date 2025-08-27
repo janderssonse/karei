@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: The Karei Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Gitleaks ignore file
+# Format: one fingerprint per line
+# Fingerprint format: commit:file:rule:line
+
+# Ignore Docker registry token from old omakub commit in dotfiles/.bashrc
+8353d5986e992adc80b171423635cd0a8b8aaa61:dotfiles/.bashrc:generic-api-key:45

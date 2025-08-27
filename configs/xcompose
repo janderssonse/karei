@@ -1,0 +1,5 @@
+include "%H/.local/share/karei/defaults/xcompose"
+
+# Identification
+<Multi_key> <space> <n> : "$KAREI_USER_NAME"
+<Multi_key> <space> <e> : "$KAREI_USER_EMAIL"

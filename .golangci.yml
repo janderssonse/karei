@@ -1,0 +1,151 @@
+# SPDX-FileCopyrightText: 2025 The Karei Authors
+#
+# SPDX-License-Identifier: CC0-1.0
+version: 2
+run:
+  timeout: 5m
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  path-prefix: ""
+issues:
+  uniq-by-line: true
+  exclude-dirs:
+    - generated
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - dupl
+    # BubbleTea framework requires returning tea.Model interface
+    - path: "internal/tui/.*\\.go"
+      linters:
+        - ireturn
+        - containedctx # TUI models need context for proper cancellation
+    # BubbleTea framework requires returning tea.Model and tea.Msg interfaces
+    - text: "returns interface.*github.com/charmbracelet/bubbletea"
+      linters:
+        - ireturn
+    # Functional programming patterns legitimately return generic interfaces
+    - path: "internal/functional/.*\\.go"
+      linters:
+        - ireturn
+    # GetArch doesn't take context parameter - false positive
+    - text: "Function `GetArch` should pass the context parameter"
+      linters:
+        - contextcheck
+    # Utils package is acceptable for consolidated string helpers
+    - path: "internal/utils/.*\\.go"
+      text: "var-naming: avoid meaningless package names"
+      linters:
+        - revive
+linters:
+  # Disable all linters.
+  # Default: false
+  disable-all: true
+  # Enable specific linter
+  # https://golangci-lint.run/usage/linters/#enabled-by-default
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    # - dupword
+    - durationcheck
+    - errcheck
+    - err113
+    - errchkjson
+    - errname
+    - errorlint
+    #    - exhaustive
+    #   - exhaustruct
+    - exptostd
+    - fatcontext
+    - forcetypeassert
+    - funcorder
+    # - funlen
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gochecksumtype
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    # - ireturn  # Disabled: incompatible with Bubble Tea framework
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    # - nlreturn # Return statement whitespace is fine
+    - noctx
+    - nolintlint
+    # - nonamedreturns # Named returns are sometimes useful
+    - nosprintfhostport
+    # - paralleltest # Tests don't need to be parallel
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    # - tagliatelle  # Disabled: JSON/YAML tag naming conventions are project-specific
+    - testableexamples
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    # - varnamelen # Short variable names are fine in small scopes
+    - wastedassign
+    - whitespace
+    # - wrapcheck  # TODO: Fix 50 error wrapping issues
+    # - wsl # Whitespace linter is too pedantic_v5
+    - zerologlint
+linters-settings:
+  varnamelen:
+    min-name-length: 2
+  revive:
+    rules:
+      - name: var-naming
+        disabled: true
+      - name: package-comments
+        disabled: true

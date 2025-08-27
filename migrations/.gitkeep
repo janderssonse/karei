@@ -1,0 +1,11 @@
+# This directory contains migration scripts for Karei version upgrades
+# Migrations are named with Unix timestamps and run chronologically
+# Example: 1718359027.sh (timestamp when migration was created)
+#
+# Migration scripts handle:
+# - Configuration file format changes
+# - New application installations  
+# - System integration updates
+# - Breaking changes between versions
+#
+# The migrate.sh script automatically runs migrations newer than the last git update

@@ -1,0 +1,8 @@
+# Main Ghostty configuration for Karei
+# This imports modular configurations for theme, font, and shared settings
+
+# Import other configuration files
+config-file = theme.conf
+config-file = font.conf
+config-file = font-size.conf
+config-file = shared.conf
