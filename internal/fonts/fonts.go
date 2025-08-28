@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,7 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/network"
+	"github.com/janderssonse/karei/internal/system"
 )
 
 var (
@@ -107,7 +109,12 @@ func DownloadAndInstallFontWithOptions(ctx context.Context, fontName string, dry
 		return nil
 	}
 
-	fontsDir := filepath.Join(os.Getenv("HOME"), ".local/share/fonts")
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	fontsDir := filepath.Join(homeDir, ".local/share/fonts")
 	if err := os.MkdirAll(fontsDir, 0755); err != nil { //nolint:gosec
 		return err
 	}
@@ -167,7 +174,12 @@ func ApplySystemFontWithOptions(ctx context.Context, fontName string, dryRun boo
 	}
 
 	// Set VSCode font
-	settingsPath := filepath.Join(os.Getenv("HOME"), ".config/Code/User/settings.json")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	settingsPath := filepath.Join(configDir, "Code/User/settings.json")
 	if _, err := os.Stat(settingsPath); err == nil {
 		// Read, modify, write settings.json - simplified approach
 		cmd := exec.CommandContext(ctx, "sed", "-i", //nolint:gosec
@@ -194,7 +206,7 @@ func downloadFontFile(ctx context.Context, url, filepath string) error {
 	fmt.Printf("↓ Connecting to %s...\n", url)
 
 	// Use proxy-aware HTTP client
-	client := platform.GetHTTPClient()
+	client := network.GetHTTPClient()
 	client.Timeout = 5 * time.Minute
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -282,7 +294,7 @@ func copyFontFiles(srcDir, dstDir, fileType string) error {
 		if !info.IsDir() && strings.HasSuffix(strings.ToLower(path), "."+fileType) {
 			dst := filepath.Join(dstDir, info.Name())
 
-			return platform.CopyFile(path, dst)
+			return system.CopyFile(path, dst)
 		}
 
 		return nil
@@ -309,7 +321,7 @@ func NewSizeManagerWithHome(verbose bool, homeDir string) *SizeManager {
 func (m *SizeManager) GetCurrentSize() (int, error) {
 	configPath := filepath.Join(m.getHomeDir(), ".config", "ghostty", "font-size.conf")
 
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); errors.Is(err, fs.ErrNotExist) {
 		return 10, nil // Default size
 	}
 
@@ -398,7 +410,7 @@ func (m *SizeManager) DecreaseFontSize() error {
 func (m *SizeManager) UpdateAlacrittyConfig(size int) error {
 	alacrittyPath := filepath.Join(m.getHomeDir(), ".config", "alacritty", "font-size.toml")
 
-	if _, err := os.Stat(alacrittyPath); os.IsNotExist(err) {
+	if _, err := os.Stat(alacrittyPath); errors.Is(err, fs.ErrNotExist) {
 		// Create if doesn't exist
 		content := fmt.Sprintf("size = %d\n", size)
 
@@ -459,7 +471,9 @@ func (m *SizeManager) getHomeDir() string {
 		return m.homeDir
 	}
 
-	return os.Getenv("HOME")
+	homeDir, _ := os.UserHomeDir()
+
+	return homeDir
 }
 
 // SetFontSize is a convenience function for setting font size.

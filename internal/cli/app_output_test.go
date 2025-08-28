@@ -151,7 +151,7 @@ func TestCLI_ListCommand_Output(t *testing.T) {
 func TestCLI_OutputExitCodes(t *testing.T) {
 	tests := []struct {
 		name     string
-		result   interface{}
+		result   any
 		wantCode int
 		wantErr  bool
 	}{
@@ -218,7 +218,7 @@ func TestCLI_OutputExitCodes(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 
-				exitErr := &ExitError{}
+				exitErr := &domain.ExitError{}
 				ok := errors.As(err, &exitErr)
 				require.True(t, ok)
 				assert.Equal(t, tt.wantCode, exitErr.Code)
@@ -379,7 +379,7 @@ func TestCLI_IntegrationScenarios(t *testing.T) {
 
 func TestCLI_OutputFormatConsistency(t *testing.T) {
 	t.Run("all commands support JSON format consistently", func(t *testing.T) {
-		results := []interface{}{
+		results := []any{
 			&domain.InstallResult{},
 			&domain.UninstallResult{},
 			&domain.ListResult{},
@@ -394,7 +394,7 @@ func TestCLI_OutputFormatConsistency(t *testing.T) {
 			assert.NotEmpty(t, data)
 
 			// Verify JSON is valid
-			var decoded map[string]interface{}
+			var decoded map[string]any
 
 			err = json.Unmarshal(data, &decoded)
 			require.NoError(t, err)

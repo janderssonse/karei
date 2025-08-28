@@ -20,7 +20,7 @@ var (
 	// ErrPackageNotInstalled indicates a package is not installed.
 	ErrPackageNotInstalled = errors.New("package is not installed")
 	// ErrInvalidResponseType indicates an invalid response type was received.
-	ErrInvalidResponseType = errors.New("response is not a map[string]interface{}")
+	ErrInvalidResponseType = errors.New("response is not a map[string]any")
 )
 
 // InstallRecord tracks installation history.
@@ -286,7 +286,7 @@ func (mce *MockCommandExecutor) Reset() {
 
 // MockGitHubClient simulates GitHub API interactions.
 type MockGitHubClient struct {
-	responses map[string]interface{}
+	responses map[string]any
 	failures  map[string]error
 	verbose   bool
 }
@@ -294,14 +294,14 @@ type MockGitHubClient struct {
 // NewMockGitHubClient creates a new mock GitHub client.
 func NewMockGitHubClient(verbose bool) *MockGitHubClient {
 	return &MockGitHubClient{
-		responses: make(map[string]interface{}),
+		responses: make(map[string]any),
 		failures:  make(map[string]error),
 		verbose:   verbose,
 	}
 }
 
 // SetResponse sets mock response for API endpoint.
-func (mgc *MockGitHubClient) SetResponse(endpoint string, response interface{}) {
+func (mgc *MockGitHubClient) SetResponse(endpoint string, response any) {
 	mgc.responses[endpoint] = response
 }
 
@@ -311,7 +311,7 @@ func (mgc *MockGitHubClient) SetFailure(endpoint string, err error) {
 }
 
 // GetLatestRelease simulates getting latest release info.
-func (mgc *MockGitHubClient) GetLatestRelease(repo string) (map[string]interface{}, error) {
+func (mgc *MockGitHubClient) GetLatestRelease(repo string) (map[string]any, error) {
 	endpoint := "repos/" + repo + "/releases/latest"
 
 	if mgc.verbose {
@@ -323,7 +323,7 @@ func (mgc *MockGitHubClient) GetLatestRelease(repo string) (map[string]interface
 	}
 
 	if response, exists := mgc.responses[endpoint]; exists {
-		if typedResponse, ok := response.(map[string]interface{}); ok {
+		if typedResponse, ok := response.(map[string]any); ok {
 			return typedResponse, nil
 		}
 
@@ -331,10 +331,10 @@ func (mgc *MockGitHubClient) GetLatestRelease(repo string) (map[string]interface
 	}
 
 	// Default mock response
-	return map[string]interface{}{
+	return map[string]any{
 		"tag_name": "v1.0.0",
-		"assets": []interface{}{
-			map[string]interface{}{
+		"assets": []any{
+			map[string]any{
 				"name":                 extractRepoName(repo) + "_1.0.0_Linux_x86_64.tar.gz",
 				"browser_download_url": "https://github.com/" + repo + "/releases/download/v1.0.0/" + extractRepoName(repo) + "_1.0.0_Linux_x86_64.tar.gz",
 			},

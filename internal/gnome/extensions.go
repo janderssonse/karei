@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +30,7 @@ type Extension struct {
 	Name        string
 	Description string
 	SchemaPath  string
-	Settings    map[string]interface{}
+	Settings    map[string]any
 }
 
 // Extensions contains available GNOME extensions.
@@ -39,7 +40,7 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Tactile",
 		Description: "Advanced window tiling for GNOME",
 		SchemaPath:  "org.gnome.shell.extensions.tactile.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.tactile col-0":    1,
 			"org.gnome.shell.extensions.tactile col-1":    2,
 			"org.gnome.shell.extensions.tactile col-2":    1,
@@ -54,7 +55,7 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Just Perfection",
 		Description: "Customize GNOME Shell interface",
 		SchemaPath:  "org.gnome.shell.extensions.just-perfection.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.just-perfection animation":        2,
 			"org.gnome.shell.extensions.just-perfection dash-app-running": true,
 			"org.gnome.shell.extensions.just-perfection workspace":        true,
@@ -66,7 +67,7 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Blur My Shell",
 		Description: "Adds blur effects to GNOME Shell",
 		SchemaPath:  "org.gnome.shell.extensions.blur-my-shell.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.blur-my-shell.appfolder blur":                  false,
 			"org.gnome.shell.extensions.blur-my-shell.lockscreen blur":                 false,
 			"org.gnome.shell.extensions.blur-my-shell.screenshot blur":                 false,
@@ -86,7 +87,7 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Space Bar",
 		Description: "Enhanced workspace management",
 		SchemaPath:  "org.gnome.shell.extensions.space-bar.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.space-bar.behavior smart-workspace-names":                false,
 			"org.gnome.shell.extensions.space-bar.shortcuts enable-activate-workspace-shortcuts": false,
 			"org.gnome.shell.extensions.space-bar.shortcuts enable-move-to-workspace-shortcuts":  true,
@@ -97,14 +98,14 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Undecorate",
 		Description: "Remove window decorations",
 		SchemaPath:  "org.gnome.shell.extensions.undecorate.gschema.xml",
-		Settings:    map[string]interface{}{},
+		Settings:    map[string]any{},
 	},
 	"tophat": {
 		ID:          "tophat@fflewddur.github.io",
 		Name:        "TopHat",
 		Description: "System monitoring in top bar",
 		SchemaPath:  "org.gnome.shell.extensions.tophat.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.tophat show-icons":         false,
 			"org.gnome.shell.extensions.tophat show-cpu":           false,
 			"org.gnome.shell.extensions.tophat show-disk":          false,
@@ -118,7 +119,7 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 		Name:        "Alphabetical App Grid",
 		Description: "Sort application grid alphabetically",
 		SchemaPath:  "org.gnome.shell.extensions.AlphabeticalAppGrid.gschema.xml",
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"org.gnome.shell.extensions.alphabetical-app-grid folder-order-position": "end",
 		},
 	},
@@ -333,9 +334,9 @@ func (m *ExtensionManager) GetExtensionStatus(ctx context.Context, extensionName
 // Helper methods
 
 func (m *ExtensionManager) copyExtensionSchema(ctx context.Context, ext Extension) error {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return ErrHomeNotSet
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	xdgDataHome := os.Getenv("XDG_DATA_HOME")
@@ -347,7 +348,7 @@ func (m *ExtensionManager) copyExtensionSchema(ctx context.Context, ext Extensio
 	destPath := filepath.Join("/usr/share/glib-2.0/schemas/", ext.SchemaPath)
 
 	// Check if source exists
-	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+	if _, err := os.Stat(sourcePath); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("%w: %s", ErrSchemaNotFound, sourcePath)
 	}
 
@@ -355,7 +356,7 @@ func (m *ExtensionManager) copyExtensionSchema(ctx context.Context, ext Extensio
 	return exec.CommandContext(ctx, "sudo", "cp", sourcePath, destPath).Run() //nolint:gosec
 }
 
-func (m *ExtensionManager) setGSetting(ctx context.Context, setting string, value interface{}) error {
+func (m *ExtensionManager) setGSetting(ctx context.Context, setting string, value any) error {
 	var valueStr string
 
 	switch settingValue := value.(type) {

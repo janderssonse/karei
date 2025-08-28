@@ -4,11 +4,12 @@
 package desktop
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/janderssonse/karei/internal/stringutil"
 )
 
 func TestDesktopApps(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCreateDesktopEntry(t *testing.T) {
 
 	// Check that file was created
 	desktopFile := filepath.Join(tmpHome, ".local/share/applications", "About.desktop")
-	if _, err := os.Stat(desktopFile); os.IsNotExist(err) {
+	if _, err := os.Stat(desktopFile); errors.Is(err, fs.ErrNotExist) {
 		t.Error("Desktop file was not created")
 	}
 
@@ -48,15 +49,15 @@ func TestCreateDesktopEntry(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !stringutil.Contains(contentStr, "Name=About") {
+	if !strings.Contains(contentStr, "Name=About") {
 		t.Error("Desktop file missing Name field")
 	}
 
-	if !stringutil.Contains(contentStr, "Exec=") {
+	if !strings.Contains(contentStr, "Exec=") {
 		t.Error("Desktop file missing Exec field")
 	}
 
-	if !stringutil.Contains(contentStr, "[Desktop Entry]") {
+	if !strings.Contains(contentStr, "[Desktop Entry]") {
 		t.Error("Desktop file missing Desktop Entry header")
 	}
 }
@@ -89,7 +90,7 @@ func TestRemoveDesktopEntry(t *testing.T) {
 
 	// Check that file was removed
 	desktopFile := filepath.Join(tmpHome, ".local/share/applications", "About.desktop")
-	if _, err := os.Stat(desktopFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(desktopFile); !errors.Is(err, fs.ErrNotExist) {
 		t.Error("Desktop file was not removed")
 	}
 }
@@ -109,7 +110,7 @@ func TestCreateAllDesktopEntries(t *testing.T) {
 	appsDir := filepath.Join(tmpHome, ".local/share/applications")
 	for _, app := range DesktopApps {
 		desktopFile := filepath.Join(appsDir, app.Name+".desktop")
-		if _, err := os.Stat(desktopFile); os.IsNotExist(err) {
+		if _, err := os.Stat(desktopFile); errors.Is(err, fs.ErrNotExist) {
 			t.Errorf("Desktop file %s was not created", app.Name)
 		}
 	}

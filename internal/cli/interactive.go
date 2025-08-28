@@ -379,7 +379,7 @@ func (app *CLI) selectEmojiForGroup(group string) string {
 	return "⬛"
 }
 
-func (app *CLI) createUniversalManager(managerType string, verbose bool) interface{} {
+func (app *CLI) createUniversalManager(managerType string, verbose bool) any {
 	switch managerType {
 	case ManagerTypeTheme:
 		return app.getThemeManager(verbose)
@@ -390,7 +390,7 @@ func (app *CLI) createUniversalManager(managerType string, verbose bool) interfa
 	}
 }
 
-func (app *CLI) getThemeManager(_ bool) interface{} {
+func (app *CLI) getThemeManager(_ bool) any {
 	// Return theme manager - simplified for now
 	return struct {
 		Apply func(string) error
@@ -403,7 +403,7 @@ func (app *CLI) getThemeManager(_ bool) interface{} {
 	}
 }
 
-func (app *CLI) getFontManager(_ bool) interface{} {
+func (app *CLI) getFontManager(_ bool) any {
 	// Return font manager - simplified for now
 	return struct {
 		Apply func(string) error

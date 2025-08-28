@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+package network
 
 import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -364,4 +366,36 @@ func TestGetProxyForURL_NoProxyConfigured(t *testing.T) {
 	result := GetProxyForURL("http://example.com")
 
 	assert.Empty(t, result, "Should return empty when no proxy is configured")
+}
+
+// Test helper functions moved from proxy.go
+
+// hasProxy checks if any proxy is configured.
+// Checks lowercase first (takes precedence per Unix convention).
+func HasProxy() bool {
+	// Check lowercase first (precedence), then uppercase
+	proxyVars := []string{"http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"}
+	for _, v := range proxyVars {
+		if os.Getenv(v) != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isProxyURL validates if the given string is a valid proxy URL.
+func IsProxyURL(proxyStr string) bool {
+	if proxyStr == "" {
+		return false
+	}
+
+	// Handle cases without scheme
+	if !strings.HasPrefix(proxyStr, "http://") && !strings.HasPrefix(proxyStr, "https://") && !strings.HasPrefix(proxyStr, "socks5://") {
+		proxyStr = "http://" + proxyStr
+	}
+
+	_, err := url.Parse(proxyStr)
+
+	return err == nil
 }

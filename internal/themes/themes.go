@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,12 +19,34 @@ import (
 var (
 	// ErrUnknownTheme is returned when an unknown theme is requested.
 	ErrUnknownTheme = errors.New("unknown theme")
-	// ErrInvalidPreferenceMap indicates the preference map is invalid or malformed.
+	// ErrInvalidPreferenceMap is returned when preference is not a map.
 	ErrInvalidPreferenceMap = errors.New("preference is not a map")
-	// ErrInvalidTheme indicates the theme is malformed or invalid.
+	// ErrInvalidTheme is returned when theme data is invalid.
 	ErrInvalidTheme = errors.New("invalid theme")
-	// ErrThemeNotFound indicates the theme was not found.
+	// ErrThemeNotFound is returned when theme file is not found.
 	ErrThemeNotFound = errors.New("theme not found")
+)
+
+// Chrome theme scheme constants.
+const (
+	// ChromeSchemeAuto uses system color scheme.
+	ChromeSchemeAuto = 0
+	// ChromeSchemeLight forces light theme.
+	ChromeSchemeLight = 1
+	// ChromeSchemeDark forces dark theme.
+	ChromeSchemeDark = 2
+)
+
+// Chrome theme variant constants.
+const (
+	// ChromeVariantTonalSpot uses tonal spot color variant.
+	ChromeVariantTonalSpot = 0
+	// ChromeVariantNeutral uses neutral color variant.
+	ChromeVariantNeutral = 1
+	// ChromeVariantVibrant uses vibrant color variant.
+	ChromeVariantVibrant = 2
+	// ChromeVariantExpressive uses expressive color variant.
+	ChromeVariantExpressive = 3
 )
 
 // ThemeConfig represents a complete theme configuration.
@@ -64,8 +87,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-purple",
 			CursorTheme:     "Yaru",
 			AccentColor:     "purple",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     4521796,
 			VSCodeExtension: "enkia.tokyo-night",
 			VSCodeTheme:     "Tokyo Night",
@@ -78,8 +101,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-purple",
 			CursorTheme:     "Yaru",
 			AccentColor:     "purple",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     9699539,
 			VSCodeExtension: "catppuccin.catppuccin-vsc",
 			VSCodeTheme:     "Catppuccin Mocha",
@@ -92,8 +115,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-blue",
 			CursorTheme:     "Yaru",
 			AccentColor:     "blue",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     5951037,
 			VSCodeExtension: "arcticicestudio.nord-visual-studio-code",
 			VSCodeTheme:     "Nord",
@@ -106,8 +129,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-green",
 			CursorTheme:     "Yaru",
 			AccentColor:     "green",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     7384391,
 			VSCodeExtension: "sainnhe.everforest",
 			VSCodeTheme:     "Everforest Dark",
@@ -120,8 +143,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-bark",
 			CursorTheme:     "Yaru",
 			AccentColor:     "orange",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     13395456,
 			VSCodeExtension: "jdinhlife.gruvbox",
 			VSCodeTheme:     "Gruvbox Dark Medium",
@@ -148,8 +171,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-red",
 			CursorTheme:     "Yaru",
 			AccentColor:     "red",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     8947848,
 			VSCodeExtension: "qufiwefefwoyn.kanagawa",
 			VSCodeTheme:     "Kanagawa",
@@ -162,8 +185,8 @@ func getThemes() map[string]ThemeConfig {
 			IconTheme:       "Yaru-pink",
 			CursorTheme:     "Yaru",
 			AccentColor:     "pink",
-			ChromeScheme:    2,
-			ChromeVariant:   0,
+			ChromeScheme:    ChromeSchemeDark,
+			ChromeVariant:   ChromeVariantTonalSpot,
 			ChromeColor:     12171705,
 			VSCodeExtension: "mvllow.rose-pine",
 			VSCodeTheme:     "Rosé Pine",
@@ -217,6 +240,39 @@ func ApplyGnomeThemeWithOptions(ctx context.Context, themeName string, dryRun bo
 	return nil
 }
 
+// ChromePreferences represents Chrome's preferences structure.
+type ChromePreferences struct {
+	Extensions map[string]any             `json:"extensions,omitempty"`
+	Browser    map[string]any             `json:"browser,omitempty"`
+	NTP        map[string]any             `json:"ntp,omitempty"`
+	Extra      map[string]json.RawMessage `json:"-"` // Preserve unknown fields
+}
+
+// MarshalJSON implements custom marshaling to preserve unknown fields.
+func (c *ChromePreferences) MarshalJSON() ([]byte, error) {
+	result := make(map[string]any)
+
+	// Add known fields
+	if c.Extensions != nil {
+		result["extensions"] = c.Extensions
+	}
+
+	if c.Browser != nil {
+		result["browser"] = c.Browser
+	}
+
+	if c.NTP != nil {
+		result["ntp"] = c.NTP
+	}
+
+	// Add preserved unknown fields
+	for k, v := range c.Extra {
+		result[k] = v
+	}
+
+	return json.Marshal(result)
+}
+
 // ApplyChromeTheme applies a theme to Google Chrome browser.
 func ApplyChromeTheme(ctx context.Context, themeName string) error { //nolint:cyclop
 	theme, exists := getThemes()[themeName]
@@ -224,21 +280,24 @@ func ApplyChromeTheme(ctx context.Context, themeName string) error { //nolint:cy
 		return fmt.Errorf("%w: %s", ErrUnknownTheme, themeName)
 	}
 
-	prefsPath := filepath.Join(os.Getenv("HOME"), ".config/google-chrome/Default/Preferences")
-	if _, err := os.Stat(prefsPath); os.IsNotExist(err) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	prefsPath := filepath.Join(configDir, "google-chrome/Default/Preferences")
+
+	if _, err := os.Stat(prefsPath); errors.Is(err, fs.ErrNotExist) {
 		return nil // Chrome not installed, skip
 	}
 
 	// Kill Chrome
 	_ = exec.CommandContext(ctx, "pkill", "-f", "chrome").Run()
 
-	// Wait for Chrome to close
-	for range 50 {
-		if exec.CommandContext(ctx, "pgrep", "-f", "chrome").Run() != nil {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
+	// Wait for Chrome to close with timeout
+	if err := waitForProcessExit(ctx, "chrome", 5*time.Second); err != nil {
+		// Chrome didn't exit in time, but continue anyway
+		_ = err
 	}
 
 	// Read preferences
@@ -247,51 +306,63 @@ func ApplyChromeTheme(ctx context.Context, themeName string) error { //nolint:cy
 		return err
 	}
 
-	var prefs map[string]interface{}
-	if err := json.Unmarshal(data, &prefs); err != nil {
+	// Parse into structured type with preserved unknown fields
+	var prefs ChromePreferences
+
+	// First unmarshal to preserve all fields
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	// Set theme
-	if prefs["extensions"] == nil {
-		prefs["extensions"] = make(map[string]interface{})
+	// Extract known fields
+	prefs.Extra = make(map[string]json.RawMessage)
+
+	for k, v := range raw {
+		switch k {
+		case "extensions":
+			if err := json.Unmarshal(v, &prefs.Extensions); err != nil {
+				prefs.Extensions = make(map[string]any)
+			}
+		case "browser":
+			if err := json.Unmarshal(v, &prefs.Browser); err != nil {
+				prefs.Browser = make(map[string]any)
+			}
+		case "ntp":
+			if err := json.Unmarshal(v, &prefs.NTP); err != nil {
+				prefs.NTP = make(map[string]any)
+			}
+		default:
+			prefs.Extra[k] = v
+		}
 	}
 
-	extensions, extensionsOK := prefs["extensions"].(map[string]interface{})
-	if !extensionsOK {
-		return fmt.Errorf("%w: extensions", ErrInvalidPreferenceMap)
+	// Ensure maps are initialized
+	if prefs.Extensions == nil {
+		prefs.Extensions = make(map[string]any)
 	}
 
-	extensions["theme"] = map[string]interface{}{
+	if prefs.Browser == nil {
+		prefs.Browser = make(map[string]any)
+	}
+
+	if prefs.NTP == nil {
+		prefs.NTP = make(map[string]any)
+	}
+
+	// Set theme values without type assertions
+	prefs.Extensions["theme"] = map[string]any{
 		"id":           "user_color_theme_id",
 		"system_theme": 0,
 	}
 
-	if prefs["browser"] == nil {
-		prefs["browser"] = make(map[string]interface{})
-	}
-
-	browser, browserOK := prefs["browser"].(map[string]interface{})
-	if !browserOK {
-		return fmt.Errorf("%w: browser", ErrInvalidPreferenceMap)
-	}
-
-	browser["theme"] = map[string]interface{}{
+	prefs.Browser["theme"] = map[string]any{
 		"color_scheme":  theme.ChromeScheme,
 		"color_variant": theme.ChromeVariant,
 		"user_color":    theme.ChromeColor,
 	}
 
-	if prefs["ntp"] == nil {
-		prefs["ntp"] = make(map[string]interface{})
-	}
-
-	ntp, ntpOK := prefs["ntp"].(map[string]interface{})
-	if !ntpOK {
-		return fmt.Errorf("%w: ntp", ErrInvalidPreferenceMap)
-	}
-
-	ntp["custom_background_dict"] = map[string]interface{}{
+	prefs.NTP["custom_background_dict"] = map[string]any{
 		"background_url": fmt.Sprintf("https://github.com/janderssonse/karei/blob/master/themes/%s/%s?raw=true", themeName, theme.Background),
 	}
 
@@ -379,15 +450,20 @@ func ApplyVSCodeTheme(ctx context.Context, themeName string) error {
 	_ = cmd.Run()                                                                         // Ignore errors
 
 	// Update settings
-	settingsPath := filepath.Join(os.Getenv("HOME"), ".config/Code/User/settings.json")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
 
-	var settings map[string]interface{}
+	settingsPath := filepath.Join(configDir, "Code/User/settings.json")
+
+	var settings map[string]any
 	if data, err := os.ReadFile(settingsPath); err == nil { //nolint:gosec
 		_ = json.Unmarshal(data, &settings)
 	}
 
 	if settings == nil {
-		settings = make(map[string]interface{})
+		settings = make(map[string]any)
 	}
 
 	settings["workbench.colorTheme"] = theme.VSCodeTheme
@@ -401,4 +477,25 @@ func ApplyVSCodeTheme(ctx context.Context, themeName string) error {
 	_ = os.MkdirAll(filepath.Dir(settingsPath), 0755) //nolint:gosec
 
 	return os.WriteFile(settingsPath, data, 0644) //nolint:gosec
+}
+
+// waitForProcessExit waits for a process to exit with a timeout.
+func waitForProcessExit(ctx context.Context, processName string, timeout time.Duration) error {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("timeout waiting for %s to exit: %w", processName, waitCtx.Err())
+		case <-ticker.C:
+			if exec.CommandContext(ctx, "pgrep", "-f", processName).Run() != nil {
+				// Process has exited
+				return nil
+			}
+		}
+	}
 }

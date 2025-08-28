@@ -207,8 +207,8 @@ func (fs *Filesystem) ValidateInstallation(packageName string) error {
 }
 
 // GetFilesystemStats returns statistics about the isolated filesystem.
-func (fs *Filesystem) GetFilesystemStats() map[string]interface{} {
-	stats := make(map[string]interface{})
+func (fs *Filesystem) GetFilesystemStats() map[string]any {
+	stats := make(map[string]any)
 
 	stats["root_dir"] = fs.rootDir
 	stats["overlay_support"] = fs.overlaySupport

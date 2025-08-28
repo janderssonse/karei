@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+// Package config provides configuration management utilities for Karei.
+package config
 
 import (
 	"path/filepath"

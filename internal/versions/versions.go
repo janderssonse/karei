@@ -9,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/system"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -29,12 +30,12 @@ type DefaultPathResolver struct{}
 
 // GetUserVersionsConfigPath returns the path to the user's versions configuration file.
 func (p *DefaultPathResolver) GetUserVersionsConfigPath() string {
-	return filepath.Join(platform.GetXDGConfigHome(), "mise", "versions.toml")
+	return filepath.Join(config.GetXDGConfigHome(), "mise", "versions.toml")
 }
 
 // GetXDGConfigHome returns the XDG config home directory.
 func (p *DefaultPathResolver) GetXDGConfigHome() string {
-	return platform.GetXDGConfigHome()
+	return config.GetXDGConfigHome()
 }
 
 // VersionManager handles version configuration for mise tools.
@@ -64,7 +65,7 @@ func NewVersionManagerWithResolver(configPath string, resolver PathResolver) *Ve
 func (v *VersionManager) GetVersion(toolName string) (string, error) {
 	// First try user config
 	userConfigPath := v.pathResolver.GetUserVersionsConfigPath()
-	if platform.FileExists(userConfigPath) {
+	if system.FileExists(userConfigPath) {
 		userManager := NewVersionManagerWithResolver(userConfigPath, v.pathResolver)
 		if userConfig, err := userManager.loadVersionConfig(); err == nil {
 			if version, exists := userConfig.Tools[toolName]; exists {
@@ -115,5 +116,5 @@ func (v *VersionManager) loadVersionConfig() (*VersionConfig, error) {
 
 // GetVersionsConfigPath returns the path to the versions configuration file.
 func GetVersionsConfigPath() string {
-	return filepath.Join(platform.GetKareiPath(), "configs", "versions.toml")
+	return filepath.Join(config.GetKareiPath(), "configs", "versions.toml")
 }

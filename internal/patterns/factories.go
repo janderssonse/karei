@@ -14,8 +14,10 @@ import (
 	"strings"
 
 	"github.com/janderssonse/karei/internal/apps"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/console"
 	"github.com/janderssonse/karei/internal/fonts"
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/system"
 	"github.com/janderssonse/karei/internal/themes"
 )
 
@@ -219,7 +221,7 @@ func applyThemeHandlerWithDryRun(ctx context.Context, theme string, dryRun bool)
 	// Track all applications we attempt to theme
 	allApps := []string{"GNOME", "Chrome", "VSCode", ghosttyApp, "btop", "zellij"}
 
-	platform.DefaultOutput.Progressf("Applying %s theme to %d applications...", theme, len(allApps))
+	console.DefaultOutput.Progressf("Applying %s theme to %d applications...", theme, len(allApps))
 
 	// Apply native theme integrations
 	applyNativeThemes(ctx, theme, dryRun, &appliedApps, &failedApps)
@@ -236,33 +238,33 @@ func applyThemeHandlerWithDryRun(ctx context.Context, theme string, dryRun bool)
 func applyNativeThemes(ctx context.Context, theme string, dryRun bool, appliedApps *[]string, failedApps *[]string) {
 	// Apply GNOME theme
 	if err := themes.ApplyGnomeThemeWithOptions(ctx, theme, dryRun); err != nil {
-		platform.DefaultOutput.Warningf("Failed to apply GNOME theme: %v", err)
+		console.DefaultOutput.Warningf("Failed to apply GNOME theme: %v", err)
 
 		*failedApps = append(*failedApps, "GNOME")
 	} else {
-		platform.DefaultOutput.Successf("GNOME theme applied")
+		console.DefaultOutput.Successf("GNOME theme applied")
 
 		*appliedApps = append(*appliedApps, "GNOME")
 	}
 
 	// Apply Chrome theme
 	if err := themes.ApplyChromeTheme(ctx, theme); err != nil {
-		platform.DefaultOutput.Warningf("Failed to apply Chrome theme: %v", err)
+		console.DefaultOutput.Warningf("Failed to apply Chrome theme: %v", err)
 
 		*failedApps = append(*failedApps, "Chrome")
 	} else {
-		platform.DefaultOutput.Successf("Chrome theme applied")
+		console.DefaultOutput.Successf("Chrome theme applied")
 
 		*appliedApps = append(*appliedApps, "Chrome")
 	}
 
 	// Apply VSCode theme
 	if err := themes.ApplyVSCodeTheme(ctx, theme); err != nil {
-		platform.DefaultOutput.Warningf("Failed to apply VSCode theme: %v", err)
+		console.DefaultOutput.Warningf("Failed to apply VSCode theme: %v", err)
 
 		*failedApps = append(*failedApps, "VSCode")
 	} else {
-		platform.DefaultOutput.Successf("VSCode theme applied")
+		console.DefaultOutput.Successf("VSCode theme applied")
 
 		*appliedApps = append(*appliedApps, "VSCode")
 	}
@@ -274,18 +276,18 @@ func applyConfigFileThemes(theme string, appliedApps *[]string, failedApps *[]st
 	for _, app := range applications {
 		srcPath, dstPath := getThemePaths(theme, app)
 
-		if !platform.FileExists(srcPath) {
-			platform.DefaultOutput.Progressf("%s theme not available for this app", app)
+		if !system.FileExists(srcPath) {
+			console.DefaultOutput.Progressf("%s theme not available for this app", app)
 			*skippedApps = append(*skippedApps, app)
 
 			continue
 		}
 
-		if err := platform.CopyFile(srcPath, dstPath); err != nil {
-			platform.DefaultOutput.Warningf("Failed to apply %s theme to %s: %v", theme, app, err)
+		if err := system.CopyFile(srcPath, dstPath); err != nil {
+			console.DefaultOutput.Warningf("Failed to apply %s theme to %s: %v", theme, app, err)
 			*failedApps = append(*failedApps, app)
 		} else {
-			platform.DefaultOutput.Successf("%s theme applied", app)
+			console.DefaultOutput.Successf("%s theme applied", app)
 			*appliedApps = append(*appliedApps, app)
 		}
 	}
@@ -296,14 +298,14 @@ func getThemePaths(theme string, app string) (string, string) {
 
 	switch app {
 	case ghosttyApp:
-		srcPath = filepath.Join(platform.GetKareiPath(), "themes", theme, ghosttyApp+".conf")
-		dstPath = filepath.Join(platform.GetXDGConfigHome(), ghosttyApp, "theme.conf")
+		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, ghosttyApp+".conf")
+		dstPath = filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "theme.conf")
 	case "btop":
-		srcPath = filepath.Join(platform.GetKareiPath(), "themes", theme, "btop.theme")
-		dstPath = filepath.Join(platform.GetXDGConfigHome(), "btop", "themes", theme+".theme")
+		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, "btop.theme")
+		dstPath = filepath.Join(config.GetXDGConfigHome(), "btop", "themes", theme+".theme")
 	case "zellij":
-		srcPath = filepath.Join(platform.GetKareiPath(), "themes", theme, "zellij.kdl")
-		dstPath = filepath.Join(platform.GetXDGConfigHome(), "zellij", "themes", theme+".kdl")
+		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, "zellij.kdl")
+		dstPath = filepath.Join(config.GetXDGConfigHome(), "zellij", "themes", theme+".kdl")
 	}
 
 	return srcPath, dstPath
@@ -364,17 +366,17 @@ func applyFontHandlerWithDryRun(ctx context.Context, font string, dryRun bool) e
 	applications := []string{ghosttyApp}
 
 	for _, app := range applications {
-		srcPath := filepath.Join(platform.GetKareiPath(), "configs", app, "fonts", font+".conf")
-		if !platform.FileExists(srcPath) {
+		srcPath := filepath.Join(config.GetKareiPath(), "configs", app, "fonts", font+".conf")
+		if !system.FileExists(srcPath) {
 			continue
 		}
 
 		var dstPath string
 		if app == ghosttyApp {
-			dstPath = filepath.Join(platform.GetXDGConfigHome(), ghosttyApp, "font.conf")
+			dstPath = filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "font.conf")
 		}
 
-		if err := platform.CopyFile(srcPath, dstPath); err != nil {
+		if err := system.CopyFile(srcPath, dstPath); err != nil {
 			fmt.Printf("Warning: Failed to apply %s font to %s: %v\n", font, app, err)
 		}
 	}
@@ -455,7 +457,7 @@ func verifyToolsHandler(ctx context.Context, _ string) error {
 
 	executor := NewCommandExecutor(false, false)
 
-	platform.DefaultOutput.Progressf("Verifying tools...")
+	console.DefaultOutput.Progressf("Verifying tools...")
 
 	for tool, method := range tools {
 		var isInstalled bool
@@ -465,7 +467,7 @@ func verifyToolsHandler(ctx context.Context, _ string) error {
 		case "aqua":
 			// Check if aqua is available and tool is installed via aqua with proper AQUA_ROOT_DIR
 			if executor.CommandExists("aqua") {
-				userLocal := filepath.Dir(platform.GetUserBinDir())
+				userLocal := filepath.Dir(config.GetUserBinDir())
 				cmd := exec.CommandContext(ctx, "aqua", "which", tool) //nolint:gosec
 				cmd.Env = os.Environ()
 				cmd.Env = append(cmd.Env, "AQUA_ROOT_DIR="+userLocal)
@@ -485,16 +487,16 @@ func verifyToolsHandler(ctx context.Context, _ string) error {
 }
 
 func verifyIntegrationsHandler(_ context.Context, _ string) error {
-	platform.DefaultOutput.Progressf("Verifying integrations...")
+	console.DefaultOutput.Progressf("Verifying integrations...")
 	// Check if Karei configs are properly linked
 	configs := map[string]string{
-		"fish":     filepath.Join(platform.GetXDGConfigHome(), "fish", "config.fish"),
-		ghosttyApp: filepath.Join(platform.GetXDGConfigHome(), ghosttyApp, "config"),
-		"btop":     filepath.Join(platform.GetXDGConfigHome(), "btop", "btop.conf"),
+		"fish":     filepath.Join(config.GetXDGConfigHome(), "fish", "config.fish"),
+		ghosttyApp: filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "config"),
+		"btop":     filepath.Join(config.GetXDGConfigHome(), "btop", "btop.conf"),
 	}
 
 	for name, path := range configs {
-		exists := platform.FileExists(path)
+		exists := system.FileExists(path)
 		printConfigStatus(name, exists)
 	}
 
@@ -502,8 +504,9 @@ func verifyIntegrationsHandler(_ context.Context, _ string) error {
 }
 
 func verifyPathHandler(_ context.Context, _ string) error {
-	platform.DefaultOutput.Progressf("Verifying PATH...")
-	userBin := platform.GetUserBinDir()
+	console.DefaultOutput.Progressf("Verifying PATH...")
+
+	userBin := config.GetUserBinDir()
 
 	pathEnv := os.Getenv("PATH")
 	inPath := strings.Contains(pathEnv, userBin)
@@ -513,7 +516,7 @@ func verifyPathHandler(_ context.Context, _ string) error {
 }
 
 func verifyFishHandler(_ context.Context, _ string) error {
-	platform.DefaultOutput.Progressf("Verifying Fish shell...")
+	console.DefaultOutput.Progressf("Verifying Fish shell...")
 
 	executor := NewCommandExecutor(false, false)
 
@@ -521,22 +524,23 @@ func verifyFishHandler(_ context.Context, _ string) error {
 		return ErrFishNotInstalled
 	}
 
-	fishConfig := filepath.Join(platform.GetXDGConfigHome(), "fish", "config.fish")
-	configExists := platform.FileExists(fishConfig)
+	fishConfig := filepath.Join(config.GetXDGConfigHome(), "fish", "config.fish")
+	configExists := system.FileExists(fishConfig)
 	printFishConfigStatus(configExists)
 
 	return nil
 }
 
 func verifyXDGHandler(_ context.Context, _ string) error {
-	platform.DefaultOutput.Progressf("Verifying XDG directories...")
+	console.DefaultOutput.Progressf("Verifying XDG directories...")
+
 	dirs := map[string]string{
-		"CONFIG": platform.GetXDGConfigHome(),
-		"DATA":   platform.GetXDGDataHome(),
+		"CONFIG": config.GetXDGConfigHome(),
+		"DATA":   config.GetXDGDataHome(),
 	}
 
 	for name, dir := range dirs {
-		outputXDGDirStatus(name, dir, platform.IsDir(dir))
+		outputXDGDirStatus(name, dir, system.IsDir(dir))
 	}
 
 	return nil
@@ -545,7 +549,7 @@ func verifyXDGHandler(_ context.Context, _ string) error {
 func outputXDGDirStatus(name, dir string, exists bool) {
 	keyName := "xdg-" + strings.ToLower(name) + "-home"
 
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -558,23 +562,23 @@ func outputXDGDirStatus(name, dir string, exists bool) {
 }
 
 func outputXDGSuccess(name, dir, keyName string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainKeyValue(keyName, dir)
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainKeyValue(keyName, dir)
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✓ XDG_%s_HOME: %s", name, dir))
+		console.DefaultOutput.Result(fmt.Sprintf("✓ XDG_%s_HOME: %s", name, dir))
 	}
 }
 
 func outputXDGFailure(name, dir, keyName string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(keyName, "missing")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(keyName, "missing")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✗ XDG_%s_HOME: %s (not found)", name, dir))
+		console.DefaultOutput.Result(fmt.Sprintf("✗ XDG_%s_HOME: %s (not found)", name, dir))
 	}
 }
 
 func verifyVersionsHandler(ctx context.Context, _ string) error {
-	platform.DefaultOutput.Progressf("Verifying versions...")
+	console.DefaultOutput.Progressf("Verifying versions...")
 
 	executor := NewCommandExecutor(false, false)
 
@@ -596,7 +600,7 @@ func verifyVersionsHandler(ctx context.Context, _ string) error {
 func outputVersionStatus(name, output string, err error) {
 	keyName := strings.ToLower(name) + "-version"
 
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -610,25 +614,25 @@ func outputVersionStatus(name, output string, err error) {
 }
 
 func outputVersionSuccess(name, version, keyName string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainKeyValue(keyName, version)
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainKeyValue(keyName, version)
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✓ %s: %s", name, version))
+		console.DefaultOutput.Result(fmt.Sprintf("✓ %s: %s", name, version))
 	}
 }
 
 func outputVersionFailure(name, keyName string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(keyName, "failed")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(keyName, "failed")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✗ %s: version check failed", name))
+		console.DefaultOutput.Result(fmt.Sprintf("✗ %s: version check failed", name))
 	}
 }
 
 func verifyAllHandler(ctx context.Context, _ string) error {
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Collect all verification data for JSON output
-		result := map[string]interface{}{
+		result := map[string]any{
 			"tools":        collectToolStatus(ctx),
 			"integrations": collectIntegrationStatus(),
 			"path":         collectPathStatus(),
@@ -636,7 +640,7 @@ func verifyAllHandler(ctx context.Context, _ string) error {
 			"xdg":          collectXDGStatus(),
 			"versions":     collectVersionStatus(ctx),
 		}
-		platform.DefaultOutput.JSONResult("success", result)
+		console.DefaultOutput.JSONResult("success", result)
 
 		return nil
 	}
@@ -655,7 +659,7 @@ func verifyAllHandler(ctx context.Context, _ string) error {
 			return err
 		}
 
-		if !platform.DefaultOutput.Plain {
+		if !console.DefaultOutput.Plain {
 			fmt.Fprintf(os.Stderr, "\n") // Add spacing only in human mode
 		}
 	}
@@ -685,7 +689,7 @@ func collectToolStatus(ctx context.Context) map[string]string {
 		switch method {
 		case "aqua":
 			if executor.CommandExists("aqua") {
-				userLocal := filepath.Dir(platform.GetUserBinDir())
+				userLocal := filepath.Dir(config.GetUserBinDir())
 				cmd := exec.CommandContext(ctx, "aqua", "which", tool) //nolint:gosec
 				cmd.Env = os.Environ()
 				cmd.Env = append(cmd.Env, "AQUA_ROOT_DIR="+userLocal)
@@ -709,14 +713,14 @@ func collectToolStatus(ctx context.Context) map[string]string {
 
 func collectIntegrationStatus() map[string]string {
 	configs := map[string]string{
-		"fish":     filepath.Join(platform.GetXDGConfigHome(), "fish", "config.fish"),
-		ghosttyApp: filepath.Join(platform.GetXDGConfigHome(), ghosttyApp, "config"),
-		"btop":     filepath.Join(platform.GetXDGConfigHome(), "btop", "btop.conf"),
+		"fish":     filepath.Join(config.GetXDGConfigHome(), "fish", "config.fish"),
+		ghosttyApp: filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "config"),
+		"btop":     filepath.Join(config.GetXDGConfigHome(), "btop", "btop.conf"),
 	}
 	status := make(map[string]string)
 
 	for name, path := range configs {
-		if platform.FileExists(path) {
+		if system.FileExists(path) {
 			status[name] = "found"
 		} else {
 			status[name] = "missing"
@@ -726,30 +730,30 @@ func collectIntegrationStatus() map[string]string {
 	return status
 }
 
-func collectPathStatus() map[string]interface{} {
-	userBin := platform.GetUserBinDir()
+func collectPathStatus() map[string]any {
+	userBin := config.GetUserBinDir()
 	pathEnv := os.Getenv("PATH")
 
-	return map[string]interface{}{
+	return map[string]any{
 		"user_bin_dir": userBin,
 		"in_path":      strings.Contains(pathEnv, userBin),
 	}
 }
 
-func collectFishStatus() map[string]interface{} {
+func collectFishStatus() map[string]any {
 	executor := NewCommandExecutor(false, false)
-	fishConfig := filepath.Join(platform.GetXDGConfigHome(), "fish", "config.fish")
+	fishConfig := filepath.Join(config.GetXDGConfigHome(), "fish", "config.fish")
 
-	return map[string]interface{}{
+	return map[string]any{
 		"installed":     executor.CommandExists("fish"),
-		"config_exists": platform.FileExists(fishConfig),
+		"config_exists": system.FileExists(fishConfig),
 	}
 }
 
 func collectXDGStatus() map[string]string {
 	dirs := map[string]string{
-		"config": platform.GetXDGConfigHome(),
-		"data":   platform.GetXDGDataHome(),
+		"config": config.GetXDGConfigHome(),
+		"data":   config.GetXDGDataHome(),
 	}
 	status := make(map[string]string)
 
@@ -783,7 +787,7 @@ func collectVersionStatus(ctx context.Context) map[string]string {
 }
 
 func showInstallLogsHandler(ctx context.Context, _ string) error {
-	logPath := filepath.Join(platform.GetXDGDataHome(), "karei", "install.log")
+	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "install.log")
 
 	return showLogFile(ctx, logPath, "Installation")
 }
@@ -796,7 +800,7 @@ func showInstallLogsHandlerWithPath(ctx context.Context, xdgDataHome string) err
 }
 
 func showProgressLogsHandler(ctx context.Context, _ string) error {
-	logPath := filepath.Join(platform.GetXDGDataHome(), "karei", "progress.log")
+	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "progress.log")
 
 	return showLogFile(ctx, logPath, "Progress")
 }
@@ -809,7 +813,7 @@ func showProgressLogsHandlerWithPath(ctx context.Context, xdgDataHome string) er
 }
 
 func showPrecheckLogsHandler(ctx context.Context, _ string) error {
-	logPath := filepath.Join(platform.GetXDGDataHome(), "karei", "precheck.log")
+	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "precheck.log")
 
 	return showLogFile(ctx, logPath, "Precheck")
 }
@@ -822,7 +826,7 @@ func showPrecheckLogsHandlerWithPath(ctx context.Context, xdgDataHome string) er
 }
 
 func showErrorLogsHandler(ctx context.Context, _ string) error {
-	logPath := filepath.Join(platform.GetXDGDataHome(), "karei", "errors.log")
+	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "errors.log")
 
 	return showLogFile(ctx, logPath, "Errors")
 }
@@ -872,7 +876,7 @@ func showAllLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error {
 func showLogFile(ctx context.Context, path, name string) error {
 	fmt.Printf("▸ %s Logs (%s):\n", name, path)
 
-	if !platform.FileExists(path) {
+	if !system.FileExists(path) {
 		fmt.Printf("No %s logs found\n", strings.ToLower(name))
 
 		return nil
@@ -905,7 +909,7 @@ func disableProxyHandler(_ context.Context, _ string) error {
 func showProxyStatusHandler(_ context.Context, _ string) error { //nolint:unparam
 	envVars := []string{"http_proxy", "https_proxy", "ftp_proxy", "no_proxy"}
 
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		status := make(map[string]string)
 
 		for _, env := range envVars {
@@ -916,12 +920,12 @@ func showProxyStatusHandler(_ context.Context, _ string) error { //nolint:unpara
 			}
 		}
 
-		platform.DefaultOutput.JSONResult("success", map[string]interface{}{"proxy": status})
+		console.DefaultOutput.JSONResult("success", map[string]any{"proxy": status})
 
 		return nil
 	}
 
-	platform.DefaultOutput.Progressf("Proxy Status:")
+	console.DefaultOutput.Progressf("Proxy Status:")
 
 	for _, env := range envVars {
 		value := os.Getenv(env)
@@ -940,18 +944,18 @@ func outputProxyStatus(env, value string) {
 }
 
 func outputProxySet(env, value string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainKeyValue(env, value)
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainKeyValue(env, value)
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✓ %s: %s", env, value))
+		console.DefaultOutput.Result(fmt.Sprintf("✓ %s: %s", env, value))
 	}
 }
 
 func outputProxyUnset(env string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainKeyValue(env, "unset")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainKeyValue(env, "unset")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✗ %s: not set", env))
+		console.DefaultOutput.Result(fmt.Sprintf("✗ %s: not set", env))
 	}
 }
 
@@ -967,10 +971,10 @@ func setupGitHubSSHHandler(ctx context.Context, _ string) error {
 	executor := NewCommandExecutor(true, false)
 
 	// Check if SSH key already exists
-	sshDir := filepath.Join(platform.GetUserBinDir(), "..", "..", ".ssh")
+	sshDir := filepath.Join(config.GetUserBinDir(), "..", "..", ".ssh")
 	keyPath := filepath.Join(sshDir, "id_ed25519")
 
-	if platform.FileExists(keyPath) {
+	if system.FileExists(keyPath) {
 		fmt.Println("✓ SSH key already exists")
 
 		return nil
@@ -1145,7 +1149,7 @@ func NewLogsCommand(verbose bool) *UniversalCommand {
 }
 
 func printVerificationStatus(tool string, isInstalled bool) {
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -1158,23 +1162,23 @@ func printVerificationStatus(tool string, isInstalled bool) {
 }
 
 func printToolInstalled(tool string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(tool, "installed")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(tool, "installed")
 	} else {
-		platform.DefaultOutput.Result("✓ " + tool)
+		console.DefaultOutput.Result("✓ " + tool)
 	}
 }
 
 func printToolMissing(tool string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(tool, "missing")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(tool, "missing")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✗ %s - not found", tool))
+		console.DefaultOutput.Result(fmt.Sprintf("✗ %s - not found", tool))
 	}
 }
 
 func printConfigStatus(name string, exists bool) {
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -1187,23 +1191,23 @@ func printConfigStatus(name string, exists bool) {
 }
 
 func printConfigFound(name string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(name+"-config", "found")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(name+"-config", "found")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✓ %s config", name))
+		console.DefaultOutput.Result(fmt.Sprintf("✓ %s config", name))
 	}
 }
 
 func printConfigMissing(name string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus(name+"-config", "missing")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus(name+"-config", "missing")
 	} else {
-		platform.DefaultOutput.Result(fmt.Sprintf("✗ %s config - not found", name))
+		console.DefaultOutput.Result(fmt.Sprintf("✗ %s config - not found", name))
 	}
 }
 
 func printPathStatus(userBin string, inPath bool) {
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -1216,23 +1220,23 @@ func printPathStatus(userBin string, inPath bool) {
 }
 
 func printPathFound() {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus("user-bin-path", "found")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus("user-bin-path", "found")
 	} else {
-		platform.DefaultOutput.Result("✓ User bin directory in PATH")
+		console.DefaultOutput.Result("✓ User bin directory in PATH")
 	}
 }
 
 func printPathMissing(userBin string) {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus("user-bin-path", "missing")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus("user-bin-path", "missing")
 	} else {
-		platform.DefaultOutput.Result("✗ User bin directory not in PATH: " + userBin)
+		console.DefaultOutput.Result("✗ User bin directory not in PATH: " + userBin)
 	}
 }
 
 func printFishConfigStatus(configExists bool) {
-	if platform.DefaultOutput.JSON {
+	if console.DefaultOutput.JSON {
 		// Handle JSON mode in verifyAllHandler
 		return
 	}
@@ -1245,17 +1249,17 @@ func printFishConfigStatus(configExists bool) {
 }
 
 func printFishConfigFound() {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus("fish-config", "found")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus("fish-config", "found")
 	} else {
-		platform.DefaultOutput.Result("✓ Fish configuration found")
+		console.DefaultOutput.Result("✓ Fish configuration found")
 	}
 }
 
 func printFishConfigMissing() {
-	if platform.DefaultOutput.Plain {
-		platform.DefaultOutput.PlainStatus("fish-config", "missing")
+	if console.DefaultOutput.Plain {
+		console.DefaultOutput.PlainStatus("fish-config", "missing")
 	} else {
-		platform.DefaultOutput.Result("✗ Fish configuration not found")
+		console.DefaultOutput.Result("✗ Fish configuration not found")
 	}
 }

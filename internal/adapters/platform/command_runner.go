@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/network"
 )
 
 // CommandRunner implements the CommandRunner port for real system commands.
@@ -57,7 +57,7 @@ func (r *CommandRunner) Execute(ctx context.Context, name string, args ...string
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Propagate proxy environment variables
-	cmd.Env = append(os.Environ(), platform.GetProxyEnv()...)
+	cmd.Env = append(os.Environ(), network.GetProxyEnv()...)
 
 	if r.tuiMode {
 		return r.executeTUIMode(cmd)
@@ -110,7 +110,7 @@ func (r *CommandRunner) ExecuteSudo(ctx context.Context, name string, args ...st
 	cmd := exec.CommandContext(ctx, "sudo", allArgs...)
 
 	// Propagate proxy environment variables to sudo command
-	cmd.Env = append(os.Environ(), platform.GetProxyEnv()...)
+	cmd.Env = append(os.Environ(), network.GetProxyEnv()...)
 
 	if r.tuiMode {
 		return r.executeTUIMode(cmd)
@@ -126,7 +126,7 @@ func (r *CommandRunner) CommandExists(name string) bool {
 	return err == nil
 }
 
-// Removed GetProxyEnv - use platform.GetProxyEnv() instead for consistency
+// Removed GetProxyEnv - use network.GetProxyEnv() instead for consistency
 
 // executeTUIMode handles command execution in TUI mode with output capture.
 func (r *CommandRunner) executeTUIMode(cmd *exec.Cmd) error {

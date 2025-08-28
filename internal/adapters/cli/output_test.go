@@ -21,7 +21,7 @@ func TestOutputAdapter_Success(t *testing.T) {
 		format       OutputFormat
 		quiet        bool
 		message      string
-		data         interface{}
+		data         any
 		wantContains string
 		wantEmpty    bool
 	}{
@@ -80,7 +80,7 @@ func TestOutputAdapter_Success(t *testing.T) {
 
 			// Verify JSON is valid when in JSON format with data
 			if tt.format == JSONFormat && tt.data != nil {
-				var result map[string]interface{}
+				var result map[string]any
 
 				err := json.Unmarshal(buf.Bytes(), &result)
 				assert.NoError(t, err)
@@ -185,22 +185,22 @@ func TestOutputAdapter_Table(t *testing.T) {
 		err := adapter.Table(headers, rows)
 		require.NoError(t, err)
 
-		var result map[string]interface{}
+		var result map[string]any
 
 		err = json.Unmarshal(buf.Bytes(), &result)
 		require.NoError(t, err)
 
-		// Headers come back as []interface{} from JSON unmarshal
-		resultHeaders, ok := result["headers"].([]interface{})
-		require.True(t, ok, "headers should be []interface{}")
+		// Headers come back as []any from JSON unmarshal
+		resultHeaders, ok := result["headers"].([]any)
+		require.True(t, ok, "headers should be []any")
 		assert.Len(t, resultHeaders, len(headers))
 
 		for i, h := range headers {
 			assert.Equal(t, h, resultHeaders[i])
 		}
 
-		resultRows, ok := result["rows"].([]interface{})
-		require.True(t, ok, "rows should be []interface{}")
+		resultRows, ok := result["rows"].([]any)
+		require.True(t, ok, "rows should be []any")
 		assert.Len(t, resultRows, 3)
 	})
 

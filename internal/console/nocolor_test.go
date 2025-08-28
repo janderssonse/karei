@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+package console
 
 import (
 	"os"

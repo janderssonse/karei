@@ -11,7 +11,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/console"
+	"github.com/janderssonse/karei/internal/domain"
+	"github.com/janderssonse/karei/internal/system"
 )
 
 // Exit codes (matching main.go).
@@ -39,30 +42,6 @@ var (
 	// ErrInvalidInput indicates the provided input is malformed or invalid.
 	ErrInvalidInput = errors.New("invalid input")
 )
-
-// ExitError provides specific exit codes for different failure modes.
-type ExitError struct {
-	Code    int
-	Message string
-	Err     error
-}
-
-// NewExitError creates an ExitError with the specified code and message.
-func NewExitError(code int, message string, err error) *ExitError {
-	return &ExitError{
-		Code:    code,
-		Message: message,
-		Err:     err,
-	}
-}
-
-func (e *ExitError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-
-	return e.Message
-}
 
 // UniversalManager consolidates ALL manager patterns into one flexible interface
 // Eliminates 15+ separate manager implementations by using composition over inheritance.
@@ -149,16 +128,16 @@ func WithAvailable(available []string) ManagerOption {
 
 // NewUniversalManager creates any type of manager using unified pattern
 // Replaces 15+ separate NewManager() functions with one flexible constructor.
-func NewUniversalManager(config UniversalConfig) *UniversalManager {
+func NewUniversalManager(cfg UniversalConfig) *UniversalManager {
 	return &UniversalManager{
-		Name:       config.Name,
-		Type:       string(config.Type),
-		KareiPath:  platform.GetKareiPath(),
-		ConfigPath: platform.GetConfigPath(string(config.Type)),
-		Available:  config.Available,
-		verbose:    config.Verbose,
-		dryRun:     config.DryRun,
-		handlers:   config.Handlers,
+		Name:       cfg.Name,
+		Type:       string(cfg.Type),
+		KareiPath:  config.GetKareiPath(),
+		ConfigPath: config.GetConfigPath(string(cfg.Type)),
+		Available:  cfg.Available,
+		verbose:    cfg.Verbose,
+		dryRun:     cfg.DryRun,
+		handlers:   cfg.Handlers,
 	}
 }
 
@@ -167,8 +146,8 @@ func NewUniversalManagerWithOptions(name string, managerType ManagerType, opts .
 	manager := &UniversalManager{
 		Name:       name,
 		Type:       string(managerType),
-		KareiPath:  platform.GetKareiPath(),
-		ConfigPath: platform.GetConfigPath(string(managerType)),
+		KareiPath:  config.GetKareiPath(),
+		ConfigPath: config.GetConfigPath(string(managerType)),
 		handlers:   make(map[string]func(context.Context, string) error),
 	}
 
@@ -198,10 +177,10 @@ func (um *UniversalManager) Apply(ctx context.Context, target string) error {
 			code = ExitAppError
 		}
 
-		return NewExitError(code, fmt.Sprintf("invalid %s: %s", um.Type, target), nil)
+		return domain.NewExitError(code, fmt.Sprintf("invalid %s: %s", um.Type, target), nil)
 	}
 
-	platform.DefaultOutput.Progressf("Applying %s: %s", um.Type, target)
+	console.DefaultOutput.Progressf("Applying %s: %s", um.Type, target)
 
 	// Use specific handler if available
 	var err error
@@ -211,15 +190,15 @@ func (um *UniversalManager) Apply(ctx context.Context, target string) error {
 		// Fall back to default handler
 		err = defaultHandler(ctx, target)
 	} else {
-		return NewExitError(ExitConfigError, "no handler available for "+target, nil)
+		return domain.NewExitError(ExitConfigError, "no handler available for "+target, nil)
 	}
 
 	// Handle error case first to reduce nesting
 	if err != nil {
 		if um.verbose {
-			platform.DefaultOutput.Errorf("Failed to apply %s %s: %v", um.Type, target, err)
+			console.DefaultOutput.Errorf("Failed to apply %s %s: %v", um.Type, target, err)
 		} else {
-			platform.DefaultOutput.Errorf("Failed to apply %s %s", um.Type, target)
+			console.DefaultOutput.Errorf("Failed to apply %s %s", um.Type, target)
 		}
 
 		return err
@@ -230,13 +209,13 @@ func (um *UniversalManager) Apply(ctx context.Context, target string) error {
 	if saveErr := um.SaveCurrent(target); saveErr != nil {
 		msg := "Failed to save configuration"
 		if um.verbose {
-			platform.DefaultOutput.Warningf("%s: %v", msg, saveErr)
+			console.DefaultOutput.Warningf("%s: %v", msg, saveErr)
 		} else {
-			platform.DefaultOutput.Warningf("%s", msg)
+			console.DefaultOutput.Warningf("%s", msg)
 		}
 	}
 
-	platform.DefaultOutput.Successf("%s applied successfully: %s", um.Type, target)
+	console.DefaultOutput.Successf("%s applied successfully: %s", um.Type, target)
 
 	return err
 }
@@ -268,7 +247,7 @@ func (um *UniversalManager) SaveCurrent(choice string) error {
 
 	content := fmt.Sprintf("KAREI_%s=%s\n", strings.ToUpper(um.Type), choice)
 
-	return platform.SafeWriteFile(um.ConfigPath, []byte(content))
+	return system.SafeWriteFile(um.ConfigPath, []byte(content))
 }
 
 // SetCurrent sets current selection with validation.
@@ -283,8 +262,8 @@ func (um *UniversalManager) SetCurrent(choice string) error {
 }
 
 // Status returns current status information.
-func (um *UniversalManager) Status() map[string]interface{} {
-	return map[string]interface{}{
+func (um *UniversalManager) Status() map[string]any {
+	return map[string]any{
 		"type":      um.Type,
 		"current":   um.GetCurrent(),
 		"available": um.Available,
@@ -296,7 +275,7 @@ func (um *UniversalManager) Status() map[string]interface{} {
 
 // detectCurrent attempts to detect current configuration.
 func (um *UniversalManager) detectCurrent() string {
-	if !platform.FileExists(um.ConfigPath) {
+	if !system.FileExists(um.ConfigPath) {
 		return um.getDefault()
 	}
 
@@ -407,24 +386,24 @@ func (uc *UniversalCommand) showAvailable() {
 	current := uc.Manager.GetCurrent()
 
 	switch {
-	case platform.DefaultOutput.JSON:
-		platform.DefaultOutput.JSONResult("success", map[string]interface{}{
+	case console.DefaultOutput.JSON:
+		console.DefaultOutput.JSONResult("success", map[string]any{
 			"type":      uc.Manager.Type,
 			"current":   current,
 			"available": uc.Manager.Available,
 		})
-	case platform.DefaultOutput.Plain:
+	case console.DefaultOutput.Plain:
 		// Plain mode: output each option with current status
 		for _, option := range uc.Manager.Available {
 			if option == current {
-				platform.DefaultOutput.PlainStatus(option, "current")
+				console.DefaultOutput.PlainStatus(option, "current")
 			} else {
-				platform.DefaultOutput.PlainStatus(option, "available")
+				console.DefaultOutput.PlainStatus(option, "available")
 			}
 		}
 	default:
 		// Human-readable mode with visual markers
-		platform.DefaultOutput.Progressf("Available %s options:", uc.Manager.Type)
+		console.DefaultOutput.Progressf("Available %s options:", uc.Manager.Type)
 
 		for _, option := range uc.Manager.Available {
 			marker := "  "
@@ -432,7 +411,7 @@ func (uc *UniversalCommand) showAvailable() {
 				marker = "▶ "
 			}
 
-			platform.DefaultOutput.Result(fmt.Sprintf("%s%s", marker, option))
+			console.DefaultOutput.Result(fmt.Sprintf("%s%s", marker, option))
 		}
 	}
 }
@@ -442,15 +421,15 @@ func (uc *UniversalCommand) showStatus() {
 	status := uc.Manager.Status()
 
 	switch {
-	case platform.DefaultOutput.JSON:
-		platform.DefaultOutput.JSONResult("success", status)
-	case platform.DefaultOutput.Plain:
+	case console.DefaultOutput.JSON:
+		console.DefaultOutput.JSONResult("success", status)
+	case console.DefaultOutput.Plain:
 		// Plain mode: just output the current value
-		platform.DefaultOutput.PlainValue(fmt.Sprintf("%s", status["current"]))
+		console.DefaultOutput.PlainValue(fmt.Sprintf("%s", status["current"]))
 	default:
 		// Human-readable mode with additional info
-		platform.DefaultOutput.Result(fmt.Sprintf("%s", status["current"]))
-		platform.DefaultOutput.Progressf("Available: %v", status["available"])
+		console.DefaultOutput.Result(fmt.Sprintf("%s", status["current"]))
+		console.DefaultOutput.Progressf("Available: %v", status["available"])
 	}
 }
 
@@ -473,23 +452,23 @@ func (uc *UniversalCommand) showConciseHelp() {
 // runInteractive runs interactive selection with timeout handling.
 func (uc *UniversalCommand) runInteractive(ctx context.Context) error {
 	// Skip interactive mode in JSON mode
-	if platform.DefaultOutput.JSON {
-		return NewExitError(ExitUsageError, "interactive mode not available in JSON output mode", nil)
+	if console.DefaultOutput.JSON {
+		return domain.NewExitError(ExitUsageError, "interactive mode not available in JSON output mode", nil)
 	}
 
 	// Check if stdin is a terminal - if not, show help instead of hanging
-	if !platform.DefaultOutput.IsTTY(os.Stdin.Fd()) {
-		platform.DefaultOutput.Errorf("Interactive mode requires a terminal")
+	if !console.DefaultOutput.IsTTY(os.Stdin.Fd()) {
+		console.DefaultOutput.Errorf("Interactive mode requires a terminal")
 		fmt.Fprintf(os.Stderr, "Use: karei %s <option> or karei %s list\n", uc.Name, uc.Name)
 
-		return NewExitError(ExitUsageError, "stdin is not a terminal", nil)
+		return domain.NewExitError(ExitUsageError, "stdin is not a terminal", nil)
 	}
 
 	available := uc.Manager.GetAvailable()
 	current := uc.Manager.GetCurrent()
 
-	platform.DefaultOutput.Progressf("Current %s: %s", uc.Manager.Type, current)
-	platform.DefaultOutput.Progressf("Available %s options:", uc.Manager.Type)
+	console.DefaultOutput.Progressf("Current %s: %s", uc.Manager.Type, current)
+	console.DefaultOutput.Progressf("Available %s options:", uc.Manager.Type)
 
 	for index, option := range available {
 		marker := "  "
@@ -497,18 +476,18 @@ func (uc *UniversalCommand) runInteractive(ctx context.Context) error {
 			marker = "▶ "
 		}
 
-		platform.DefaultOutput.Progressf("%s%d. %s", marker, index+1, option)
+		console.DefaultOutput.Progressf("%s%d. %s", marker, index+1, option)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nSelect %s (1-%d): ", uc.Manager.Type, len(available))
 
 	var choice int
 	if _, err := fmt.Scanln(&choice); err != nil {
-		return NewExitError(ExitUsageError, "invalid input", err)
+		return domain.NewExitError(ExitUsageError, "invalid input", err)
 	}
 
 	if choice < 1 || choice > len(available) {
-		return NewExitError(ExitUsageError, "invalid choice", nil)
+		return domain.NewExitError(ExitUsageError, "invalid choice", nil)
 	}
 
 	selected := available[choice-1]
@@ -540,7 +519,7 @@ func (ce *CommandExecutor) Execute(ctx context.Context, name string, args ...str
 		return nil
 	}
 
-	return platform.Run(ctx, ce.verbose, name, args...)
+	return system.Run(ctx, ce.verbose, name, args...)
 }
 
 // ExecuteSudo runs command with sudo using unified patterns.
@@ -558,7 +537,7 @@ func (ce *CommandExecutor) ExecuteWithOutput(ctx context.Context, name string, a
 		return "", nil
 	}
 
-	return platform.RunWithOutput(ctx, name, args...)
+	return system.RunWithOutput(ctx, name, args...)
 }
 
 // ExecuteSilent runs command silently.
@@ -567,12 +546,12 @@ func (ce *CommandExecutor) ExecuteSilent(ctx context.Context, name string, args 
 		return nil
 	}
 
-	return platform.RunSilent(ctx, name, args...)
+	return system.RunSilent(ctx, name, args...)
 }
 
 // CommandExists checks if command is available.
 func (ce *CommandExecutor) CommandExists(name string) bool {
-	return platform.CommandExists(name)
+	return system.CommandExists(name)
 }
 
 // ServiceController consolidates systemctl operations

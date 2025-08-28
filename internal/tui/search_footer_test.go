@@ -4,10 +4,10 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/janderssonse/karei/internal/stringutil"
 	"github.com/janderssonse/karei/internal/tui/models"
 )
 
@@ -15,7 +15,7 @@ import (
 func TestSearchFooterContextAware(t *testing.T) {
 	t.Parallel()
 
-	app := setupTestApp()
+	app := setupTestApp(t)
 	testNormalFooter(t, app)
 	activateSearch(t, app)
 	testSearchFieldFooter(t, app)
@@ -23,7 +23,9 @@ func TestSearchFooterContextAware(t *testing.T) {
 	testSearchResultsFooter(t, app)
 }
 
-func setupTestApp() *App {
+func setupTestApp(t *testing.T) *App {
+	t.Helper()
+
 	app := NewApp()
 	app.width = 80
 	app.height = 40
@@ -33,7 +35,8 @@ func setupTestApp() *App {
 
 	appModel, ok := updatedModel.(*App)
 	if !ok {
-		panic("expected *App model")
+		t.Fatalf("expected *App model, got %T", updatedModel)
+		return nil // This won't execute but satisfies compiler
 	}
 
 	return appModel
@@ -44,11 +47,11 @@ func testNormalFooter(t *testing.T, app *App) {
 
 	// Test normal footer (not searching)
 	footer := app.renderFooter()
-	if !stringutil.Contains(footer, "[/] Search") {
+	if !strings.Contains(footer, "[/] Search") {
 		t.Error("Normal footer should contain '[/] Search'")
 	}
 
-	if stringutil.Contains(footer, "[{}] Results") {
+	if strings.Contains(footer, "[{}] Results") {
 		t.Error("Normal footer should not contain search-specific keys")
 	}
 }
@@ -94,19 +97,19 @@ func testSearchFieldFooter(t *testing.T, app *App) {
 
 	// Search field has focus initially - minimal footer
 	footer := app.renderFooter()
-	if !stringutil.Contains(footer, "[{}] Results") {
+	if !strings.Contains(footer, "[{}] Results") {
 		t.Error("Search field footer should contain '[{}] Results'")
 	}
 
-	if !stringutil.Contains(footer, "[Esc] Cancel") {
+	if !strings.Contains(footer, "[Esc] Cancel") {
 		t.Error("Search field footer should contain '[Esc] Cancel'")
 	}
 	// Should not contain action keys when search field has focus
-	if stringutil.Contains(footer, "[Space/d] Select") {
+	if strings.Contains(footer, "[Space/d] Select") {
 		t.Error("Search field footer should not contain '[Space/d] Select'")
 	}
 
-	if stringutil.Contains(footer, "[jk] Navigate") && !stringutil.Contains(footer, "[jk] Navigate") {
+	if strings.Contains(footer, "[jk] Navigate") && !strings.Contains(footer, "[jk] Navigate") {
 		t.Error("Search field footer should not contain '[jk] Navigate' when field has focus")
 	}
 }
@@ -130,15 +133,15 @@ func testSearchResultsFooter(t *testing.T, app *App) {
 
 	// Search results have focus - full action footer
 	footer := app.renderFooter()
-	if !stringutil.Contains(footer, "[jk] Navigate") {
+	if !strings.Contains(footer, "[jk] Navigate") {
 		t.Error("Search results footer should contain '[jk] Navigate'")
 	}
 
-	if !stringutil.Contains(footer, "[{}] Field") {
+	if !strings.Contains(footer, "[{}] Field") {
 		t.Error("Search results footer should contain '[{}] Field'")
 	}
 
-	if !stringutil.Contains(footer, "[Space/d] Select") {
+	if !strings.Contains(footer, "[Space/d] Select") {
 		t.Error("Search results footer should contain '[Space/d] Select'")
 	}
 }

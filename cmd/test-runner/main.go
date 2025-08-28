@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -83,7 +84,7 @@ type TestResult struct {
 	Status   string        `json:"status"`
 	Duration time.Duration `json:"duration"`
 	Error    string        `json:"error,omitempty"`
-	Details  interface{}   `json:"details,omitempty"`
+	Details  any           `json:"details,omitempty"`
 	ExitCode int           `json:"exit_code,omitempty"`
 }
 
@@ -214,7 +215,7 @@ func (ots *OfflineTestSuite) setupTestEnvironment() error {
 	}
 
 	// Validate fixture directory exists
-	if _, err := os.Stat(ots.fixtureDir); os.IsNotExist(err) {
+	if _, err := os.Stat(ots.fixtureDir); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("%w: %s", ErrFixtureDirectoryNotFound, ots.fixtureDir)
 	}
 
@@ -544,13 +545,13 @@ func (ots *OfflineTestSuite) outputFinalResults(exitCode int) {
 }
 
 // Logging helpers that respect output separation.
-func (ots *OfflineTestSuite) logProgressf(format string, args ...interface{}) {
+func (ots *OfflineTestSuite) logProgressf(format string, args ...any) {
 	if ots.verbose && !ots.jsonOutput {
 		ots.logger.Printf(format, args...)
 	}
 }
 
-func (ots *OfflineTestSuite) logErrorf(format string, args ...interface{}) {
+func (ots *OfflineTestSuite) logErrorf(format string, args ...any) {
 	ots.logger.Printf("ERROR: "+format, args...)
 }
 
@@ -659,7 +660,7 @@ Examples:
 
 func (ots *OfflineTestSuite) outputJSONSummary(exitCode int, totalDuration time.Duration, totalTests, passedTests int) {
 	// JSON output to stdout
-	output := map[string]interface{}{
+	output := map[string]any{
 		"status":        convertExitCodeToStatus(exitCode),
 		"exit_code":     exitCode,
 		"start_time":    ots.testStarted.Format(time.RFC3339),

@@ -60,7 +60,13 @@ var DesktopApps = map[string]DesktopApp{ //nolint:gochecknoglobals
 
 // CreateDesktopEntry creates a desktop entry file for the given application.
 func CreateDesktopEntry(appName string) error {
-	return CreateDesktopEntryWithEnv(appName, os.Getenv("HOME"), os.Getenv("USER"))
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		homeDir = os.Getenv("HOME")
+	}
+
+	return CreateDesktopEntryWithEnv(appName, homeDir, os.Getenv("USER"))
 }
 
 // CreateDesktopEntryWithEnv creates a desktop entry with custom environment variables for testing.
@@ -109,7 +115,13 @@ StartupNotify=%t
 
 // CreateAllDesktopEntries creates desktop entries for all defined applications.
 func CreateAllDesktopEntries() error {
-	return CreateAllDesktopEntriesWithEnv(os.Getenv("HOME"), os.Getenv("USER"))
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		homeDir = os.Getenv("HOME")
+	}
+
+	return CreateAllDesktopEntriesWithEnv(homeDir, os.Getenv("USER"))
 }
 
 // CreateAllDesktopEntriesWithEnv creates desktop entries with custom environment variables for testing.
@@ -125,7 +137,13 @@ func CreateAllDesktopEntriesWithEnv(homeDir, username string) error {
 
 // RemoveDesktopEntry removes a desktop entry file for the given application.
 func RemoveDesktopEntry(appName string) error {
-	return RemoveDesktopEntryWithEnv(appName, os.Getenv("HOME"))
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		homeDir = os.Getenv("HOME")
+	}
+
+	return RemoveDesktopEntryWithEnv(appName, homeDir)
 }
 
 // RemoveDesktopEntryWithEnv removes a desktop entry with custom environment variables for testing.

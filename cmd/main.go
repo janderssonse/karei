@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/janderssonse/karei/internal/cli"
+	"github.com/janderssonse/karei/internal/domain"
 )
 
 // Exit codes following Unix conventions.
@@ -35,30 +36,6 @@ const (
 	ExitMigrationError  = 24 // Migration failed
 	ExitWarnings        = 64 // Completed with warnings
 )
-
-// ExitError provides specific exit codes for different failure modes.
-type ExitError struct {
-	Code    int
-	Message string
-	Err     error
-}
-
-// NewExitError creates an ExitError with the specified code and message.
-func NewExitError(code int, message string, err error) *ExitError {
-	return &ExitError{
-		Code:    code,
-		Message: message,
-		Err:     err,
-	}
-}
-
-func (e *ExitError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-
-	return e.Message
-}
 
 func main() {
 	os.Exit(run())
@@ -93,7 +70,7 @@ func run() int {
 	ctx := context.Background()
 	if err := app.Run(ctx, os.Args); err != nil {
 		// All errors now must be ExitError with specific codes
-		exitErr := &ExitError{}
+		exitErr := &domain.ExitError{}
 		if errors.As(err, &exitErr) {
 			// Error message to stderr only
 			fmt.Fprintf(os.Stderr, "%s\n", exitErr.Message)

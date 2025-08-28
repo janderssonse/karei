@@ -7,7 +7,7 @@ package models
 // NavigateMsg is a message sent to request navigation to a specific screen.
 type NavigateMsg struct {
 	Screen int
-	Data   interface{} // Optional data to pass to the new screen
+	Data   any // Optional data to pass to the new screen
 }
 
 // Screen constants for navigation.

@@ -1,20 +1,21 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+// Package network provides network-related utilities including proxy configuration for Karei.
+package network
 
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
+	"time"
 )
 
-// GetHTTPClient returns an HTTP client configured with proxy settings.
+// GetHTTPClient returns an HTTP client configured with proxy settings and timeout.
 // Respects HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment variables.
 func GetHTTPClient() *http.Client {
 	return &http.Client{
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 		},
@@ -101,36 +102,6 @@ func ConfigureAPTProxy() []string {
 	}
 
 	return args
-}
-
-// HasProxy checks if any proxy is configured.
-// Checks lowercase first (takes precedence per Unix convention).
-func HasProxy() bool {
-	// Check lowercase first (precedence), then uppercase
-	proxyVars := []string{"http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"}
-	for _, v := range proxyVars {
-		if os.Getenv(v) != "" {
-			return true
-		}
-	}
-
-	return false
-}
-
-// IsProxyURL validates if the given string is a valid proxy URL.
-func IsProxyURL(proxyStr string) bool {
-	if proxyStr == "" {
-		return false
-	}
-
-	// Handle cases without scheme
-	if !strings.HasPrefix(proxyStr, "http://") && !strings.HasPrefix(proxyStr, "https://") && !strings.HasPrefix(proxyStr, "socks5://") {
-		proxyStr = "http://" + proxyStr
-	}
-
-	_, err := url.Parse(proxyStr)
-
-	return err == nil
 }
 
 // GetProxyForURL returns the proxy URL to use for the given target URL.

@@ -16,11 +16,13 @@ import (
 
 	cliAdapter "github.com/janderssonse/karei/internal/adapters/cli"
 	"github.com/janderssonse/karei/internal/apps"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/console"
 	"github.com/janderssonse/karei/internal/desktop"
 	"github.com/janderssonse/karei/internal/domain"
 	"github.com/janderssonse/karei/internal/fonts"
 	"github.com/janderssonse/karei/internal/patterns"
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/system"
 	"github.com/janderssonse/karei/internal/tui"
 	"github.com/janderssonse/karei/internal/uninstall"
 	"github.com/urfave/cli/v3"
@@ -83,30 +85,6 @@ var (
 	// ErrUpdateFailed is returned when update fails.
 	ErrUpdateFailed = errors.New("failed to update (check network connection)")
 )
-
-// ExitError provides specific exit codes for different failure modes.
-type ExitError struct {
-	Code    int
-	Message string
-	Err     error
-}
-
-// NewExitError creates an ExitError with the specified code and message.
-func NewExitError(code int, message string, err error) *ExitError {
-	return &ExitError{
-		Code:    code,
-		Message: message,
-		Err:     err,
-	}
-}
-
-func (e *ExitError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-
-	return e.Message
-}
 
 // CLI provides a clean, composable command-line interface following hexagonal architecture.
 // Eliminates 25+ separate CLI command files by using composition and factories.
@@ -371,7 +349,7 @@ func (app *CLI) runInstall(ctx context.Context, cmd *cli.Command) error {
 
 	// Output results
 	if err := app.outputInstallResults(result, output); err != nil {
-		return NewExitError(ExitGeneralError, "failed to output results", err)
+		return domain.NewExitError(ExitGeneralError, "failed to output results", err)
 	}
 
 	// Return appropriate exit code
@@ -507,9 +485,9 @@ func (app *CLI) getInstallExitCode(result *domain.InstallResult) error {
 			msg += "Run with --verbose for detailed errors"
 		}
 
-		return NewExitError(ExitAppError, msg, nil)
+		return domain.NewExitError(ExitAppError, msg, nil)
 	} else if len(result.Failed) > 0 {
-		return NewExitError(ExitWarnings, fmt.Sprintf("%d packages failed to install", len(result.Failed)), nil)
+		return domain.NewExitError(ExitWarnings, fmt.Sprintf("%d packages failed to install", len(result.Failed)), nil)
 	}
 
 	return nil
@@ -530,16 +508,16 @@ func (app *CLI) createUpdateCommand() *cli.Command {
 			}
 
 			executor := patterns.NewCommandExecutor(app.verbose, false)
-			kareiPath := platform.GetKareiPath()
+			kareiPath := config.GetKareiPath()
 
 			// Check if git is available
-			if !platform.CommandExists("git") {
-				return NewExitError(ExitDependencyError, "git is not installed", nil)
+			if !system.CommandExists("git") {
+				return domain.NewExitError(ExitDependencyError, "git is not installed", nil)
 			}
 
 			// Check if Karei directory exists
-			if !platform.IsDir(kareiPath) {
-				return NewExitError(ExitConfigError, "Karei installation directory not found", nil)
+			if !system.IsDir(kareiPath) {
+				return domain.NewExitError(ExitConfigError, "Karei installation directory not found", nil)
 			}
 
 			// Explicit boundary crossing notification
@@ -547,15 +525,15 @@ func (app *CLI) createUpdateCommand() *cli.Command {
 			fmt.Printf("  This will download updates from the internet\n")
 			fmt.Printf("  Repository: https://github.com/janderssonse/karei.git\n")
 
-			platform.DefaultOutput.Progressf("Updating Karei...")
+			console.DefaultOutput.Progressf("Updating Karei...")
 			if err := executor.Execute(ctx, "git", "-C", kareiPath, "pull"); err != nil {
-				return NewExitError(ExitNetworkError, "failed to update from git", err)
+				return domain.NewExitError(ExitNetworkError, "failed to update from git", err)
 			}
 
 			fmt.Printf("✓ Karei updated successfully from remote repository\n")
 			fmt.Printf("  Changes have been applied to: %s\n", kareiPath)
 
-			platform.DefaultOutput.SuccessResult("updated", "Karei updated successfully")
+			console.DefaultOutput.SuccessResult("updated", "Karei updated successfully")
 
 			return nil
 		},
@@ -651,7 +629,7 @@ func (app *CLI) runUninstall(ctx context.Context, cmd *cli.Command) error {
 	// Get packages from flag
 	packagesFlag := cmd.String("packages")
 	if packagesFlag == "" {
-		return NewExitError(ExitUsageError, "specify --packages flag with comma-separated list of packages", nil)
+		return domain.NewExitError(ExitUsageError, "specify --packages flag with comma-separated list of packages", nil)
 	}
 
 	// Track uninstallation time
@@ -699,7 +677,7 @@ func (app *CLI) runUninstall(ctx context.Context, cmd *cli.Command) error {
 
 	// Output results
 	if err := app.outputUninstallResults(result, output); err != nil {
-		return NewExitError(ExitGeneralError, "failed to output results", err)
+		return domain.NewExitError(ExitGeneralError, "failed to output results", err)
 	}
 
 	// Return appropriate exit code
@@ -853,9 +831,9 @@ func (app *CLI) getUninstallExitCode(result *domain.UninstallResult) error {
 			msg += "  • Use --verbose for detailed errors"
 		}
 
-		return NewExitError(ExitAppError, msg, nil)
+		return domain.NewExitError(ExitAppError, msg, nil)
 	} else if len(result.Failed) > 0 {
-		return NewExitError(ExitWarnings, fmt.Sprintf("%d packages failed to uninstall", len(result.Failed)), nil)
+		return domain.NewExitError(ExitWarnings, fmt.Sprintf("%d packages failed to uninstall", len(result.Failed)), nil)
 	}
 
 	return nil
@@ -958,7 +936,7 @@ func (app *CLI) getInstalledApps() []string {
 
 	for _, name := range commonApps {
 		// Check if app is actually installed
-		if platform.CommandExists(name) {
+		if system.CommandExists(name) {
 			installed = append(installed, name)
 		}
 	}
@@ -1083,7 +1061,7 @@ func (app *CLI) createVersionCommand() *cli.Command {
 		Usage: "Show version information",
 		Action: func(_ context.Context, _ *cli.Command) error {
 			version := app.getVersion()
-			platform.DefaultOutput.SuccessResult(version, "")
+			console.DefaultOutput.SuccessResult(version, "")
 
 			return nil
 		},
@@ -1160,7 +1138,7 @@ This works the same as using --help or -h flags.`,
 			}
 
 			// Command not found
-			return NewExitError(ExitNotFoundError, "unknown help topic: "+subcommand, nil)
+			return domain.NewExitError(ExitNotFoundError, "unknown help topic: "+subcommand, nil)
 		},
 	}
 }
@@ -1193,11 +1171,11 @@ func (app *CLI) runInteractiveMenu(ctx context.Context) error {
 // showMainMenu displays simplified main menu options.
 func (app *CLI) showMainMenu() (string, error) {
 	// Check if stdin is a terminal - if not, show help instead of hanging
-	if !platform.DefaultOutput.IsTTY(os.Stdin.Fd()) {
-		platform.DefaultOutput.Errorf("Interactive menu requires a terminal")
+	if !console.DefaultOutput.IsTTY(os.Stdin.Fd()) {
+		console.DefaultOutput.Errorf("Interactive menu requires a terminal")
 		fmt.Fprintf(os.Stderr, "Use: karei <command> or karei --help\n")
 
-		return "", NewExitError(ExitUsageError, "stdin is not a terminal", nil)
+		return "", domain.NewExitError(ExitUsageError, "stdin is not a terminal", nil)
 	}
 
 	options := []string{
@@ -1295,7 +1273,7 @@ func (app *CLI) interactiveInstall(ctx context.Context) error {
 // updateKarei performs Karei update.
 func (app *CLI) updateKarei(ctx context.Context) error {
 	executor := patterns.NewCommandExecutor(app.verbose, false)
-	kareiPath := platform.GetKareiPath()
+	kareiPath := config.GetKareiPath()
 
 	fmt.Println("• Connecting to Git repository for update...")
 	fmt.Println("↻ Updating Karei...")
@@ -1349,10 +1327,10 @@ func (app *CLI) defaultAction(ctx context.Context, _ *cli.Command) error {
 	if err := tui.LaunchInteractive(ctx); err != nil {
 		// TUI errors are usually terminal-related
 		if app.verbose {
-			return NewExitError(ExitGeneralError, fmt.Sprintf("Failed to launch TUI: %v", err), nil)
+			return domain.NewExitError(ExitGeneralError, fmt.Sprintf("Failed to launch TUI: %v", err), nil)
 		}
 
-		return NewExitError(ExitGeneralError, "Failed to launch interactive interface (terminal required)", nil)
+		return domain.NewExitError(ExitGeneralError, "Failed to launch interactive interface (terminal required)", nil)
 	}
 
 	return nil
@@ -1362,7 +1340,7 @@ func (app *CLI) defaultAction(ctx context.Context, _ *cli.Command) error {
 func (app *CLI) initConfig(ctx context.Context, _ *cli.Command) (context.Context, error) {
 	// Validate conflicting flags
 	if app.json && app.plain {
-		return ctx, NewExitError(ExitUsageError, "cannot use both --json and --plain flags simultaneously", nil)
+		return ctx, domain.NewExitError(ExitUsageError, "cannot use both --json and --plain flags simultaneously", nil)
 	}
 
 	// Validate color flag
@@ -1370,7 +1348,7 @@ func (app *CLI) initConfig(ctx context.Context, _ *cli.Command) (context.Context
 	case "auto", "always", "never":
 		// Valid values
 	default:
-		return ctx, NewExitError(ExitUsageError, "invalid --color value: must be auto, always, or never", nil)
+		return ctx, domain.NewExitError(ExitUsageError, "invalid --color value: must be auto, always, or never", nil)
 	}
 
 	// Apply color override to environment
@@ -1384,17 +1362,17 @@ func (app *CLI) initConfig(ctx context.Context, _ *cli.Command) (context.Context
 	// "auto" uses default TTY detection
 
 	// Configure output utilities based on flags
-	platform.DefaultOutput.SetMode(app.verbose, app.json, app.plain)
+	console.DefaultOutput.SetMode(app.verbose, app.json, app.plain)
 
-	// Set auto-yes mode for consent prompts
-	platform.AutoYes = app.yes
+	// Set global auto-yes flag
+	console.AutoYes = app.yes
 
 	return ctx, nil
 }
 
 // getVersion returns current version.
 func (app *CLI) getVersion() string {
-	versionFile := filepath.Join(platform.GetKareiPath(), "version")
+	versionFile := filepath.Join(config.GetKareiPath(), "version")
 	if content, err := os.ReadFile(versionFile); err == nil { //nolint:gosec
 		return strings.TrimSpace(string(content))
 	}
@@ -1406,7 +1384,7 @@ func (app *CLI) getVersion() string {
 func (app *CLI) getVersionWithPath(customPath string) string {
 	kareiPath := customPath
 	if kareiPath == "" {
-		kareiPath = platform.GetKareiPath()
+		kareiPath = config.GetKareiPath()
 	}
 
 	versionFile := filepath.Join(kareiPath, "version")
@@ -1456,7 +1434,7 @@ func (app *CLI) commandNotFound(_ context.Context, _ *cli.Command, command strin
 		}
 	}
 
-	platform.DefaultOutput.Errorf("'%s' is not a command.", command)
+	console.DefaultOutput.Errorf("'%s' is not a command.", command)
 	fmt.Fprintf(os.Stderr, "\nRun 'karei --help' to see available commands.\n")
 
 	// Exit with error code
@@ -1470,7 +1448,7 @@ func (app *CLI) showConciseHelp() {
 	// Output goes to stdout (helpful information, not an error)
 	if app.json {
 		// JSON mode - provide structured help data
-		platform.DefaultOutput.JSONResult("success", map[string]interface{}{
+		console.DefaultOutput.JSONResult("success", map[string]any{
 			"name":    "karei",
 			"version": version,
 			"usage":   "karei <command> [args...]",
@@ -1480,12 +1458,12 @@ func (app *CLI) showConciseHelp() {
 		// Brief help - immediate sense of what this tool does
 		fmt.Printf("karei %s - Transform Linux into a development environment\n\n", version)
 
-		fmt.Printf("%s\n", platform.DefaultOutput.Header("ESSENTIAL COMMANDS"))
+		fmt.Printf("%s\n", console.DefaultOutput.Header("ESSENTIAL COMMANDS"))
 		fmt.Printf("  install <pkg>     Install tools (git, vim, docker, go, rust)\n")
 		fmt.Printf("  theme <name>      Apply themes (tokyo-night, catppuccin, nord)\n")
 		fmt.Printf("  verify            Check what's installed\n\n")
 
-		fmt.Printf("%s\n", platform.DefaultOutput.Header("GET STARTED"))
+		fmt.Printf("%s\n", console.DefaultOutput.Header("GET STARTED"))
 		fmt.Printf("  karei install git vim\n")
 		fmt.Printf("  karei theme tokyo-night\n\n")
 
@@ -1502,7 +1480,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("karei examples - Learn by doing [version %s]\n\n", version)
 
 	// Start with essentials - you need tools before beautification
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("STORY 1: ESSENTIAL TOOLS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("STORY 1: ESSENTIAL TOOLS"))
 	fmt.Printf("First things first - get the tools every developer needs:\n\n")
 
 	fmt.Printf("  $ karei install git vim curl\n")
@@ -1522,7 +1500,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("  ✗ docker - not found\n\n")
 
 	// Now make it beautiful
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("STORY 2: INSTANT TRANSFORMATION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("STORY 2: INSTANT TRANSFORMATION"))
 	fmt.Printf("Now make your dev environment beautiful:\n\n")
 
 	fmt.Printf("  $ karei theme tokyo-night\n")
@@ -1535,7 +1513,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("  Your entire desktop just transformed! Try switching windows to see.\n\n")
 
 	// More complex - language setup
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("STORY 3: LANGUAGE SETUP"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("STORY 3: LANGUAGE SETUP"))
 	fmt.Printf("Set up a complete Go development environment:\n\n")
 
 	fmt.Printf("  $ karei install go\n")
@@ -1548,7 +1526,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("  go version go1.21.5 linux/amd64\n\n")
 
 	// Complex workflow combining multiple commands
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("STORY 4: COMPLETE SETUP"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("STORY 4: COMPLETE SETUP"))
 	fmt.Printf("Set up everything for a new project:\n\n")
 
 	fmt.Printf("  # Pick your style\n")
@@ -1576,7 +1554,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("  ✓ 15/15 common tools available\n\n")
 
 	// Advanced workflows
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("ADVANCED EXAMPLES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("ADVANCED EXAMPLES"))
 
 	fmt.Printf("Interactive app browser:\n")
 	fmt.Printf("  $ karei apps\n")
@@ -1591,7 +1569,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("      karei theme $theme && sleep 5\n")
 	fmt.Printf("    done\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("DOCUMENTATION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("DOCUMENTATION"))
 	fmt.Printf("Terminal Documentation:\n")
 	fmt.Printf("  karei help <command>      # Command-specific help\n")
 	fmt.Printf("  karei help man            # Unix manual page\n")
@@ -1602,7 +1580,7 @@ func (app *CLI) showExamples() {
 	fmt.Printf("  https://docs.karei.org/commands/theme  # Theme command guide\n")
 	fmt.Printf("  https://docs.karei.org/workflows       # Complete workflows\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SUPPORT"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SUPPORT"))
 	fmt.Printf("• Report bugs:     https://github.com/janderssonse/karei/issues\n")
 	fmt.Printf("• Ask questions:   https://github.com/janderssonse/karei/discussions\n")
 	fmt.Printf("• Source code:     https://github.com/janderssonse/karei\n")
@@ -1611,39 +1589,39 @@ func (app *CLI) showExamples() {
 // showManPage displays the manual page in terminal.
 func (app *CLI) showManPage(ctx context.Context) {
 	// Try to use system man first, fall back to embedded
-	if err := platform.Run(ctx, false, "man", "karei"); err == nil {
+	if err := system.Run(ctx, false, "man", "karei"); err == nil {
 		return
 	}
 
 	// Fall back to embedded man page content
 	fmt.Printf("KAREI(1)                         KAREI MANUAL                         KAREI(1)\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("NAME"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("NAME"))
 	fmt.Printf("       karei - Linux development environment automation\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SYNOPSIS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SYNOPSIS"))
 	fmt.Printf("       karei [global-options] command [args...]\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("DESCRIPTION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("DESCRIPTION"))
 	fmt.Printf("       Karei transforms fresh Linux installations into fully-configured\n")
 	fmt.Printf("       development environments with modern tools, beautiful themes, and\n")
 	fmt.Printf("       everything developers need to get started quickly.\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("GLOBAL OPTIONS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("GLOBAL OPTIONS"))
 	fmt.Printf("       --help, -h     Show help information\n")
 	fmt.Printf("       --verbose      Show progress messages to stderr\n")
 	fmt.Printf("       --json         Output structured JSON results\n")
 	fmt.Printf("       --plain        Output plain text without formatting\n")
 	fmt.Printf("       --version      Show version information\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("ESSENTIAL COMMANDS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("ESSENTIAL COMMANDS"))
 	fmt.Printf("       install <pkg>  Install development tools and packages\n")
 	fmt.Printf("       theme <name>   Apply coordinated themes across applications\n")
 	fmt.Printf("       verify         Check system configuration and installed tools\n")
 	fmt.Printf("       font <name>    Install and configure programming fonts\n")
 	fmt.Printf("       help <topic>   Show detailed help for commands or topics\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("EXAMPLES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("EXAMPLES"))
 	fmt.Printf("       Install essential tools:\n")
 	fmt.Printf("           karei install git vim curl\n\n")
 	fmt.Printf("       Apply a beautiful theme:\n")
@@ -1651,7 +1629,7 @@ func (app *CLI) showManPage(ctx context.Context) {
 	fmt.Printf("       Check your setup:\n")
 	fmt.Printf("           karei verify\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("EXIT CODES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("EXIT CODES"))
 	fmt.Printf("       0      Success\n")
 	fmt.Printf("       2      Usage error\n")
 	fmt.Printf("       5      Not found (theme/font/app)\n")
@@ -1659,12 +1637,12 @@ func (app *CLI) showManPage(ctx context.Context) {
 	fmt.Printf("       20-24  Domain-specific errors\n")
 	fmt.Printf("       64     Completed with warnings\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SEE ALSO"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SEE ALSO"))
 	fmt.Printf("       karei help examples    Complete workflows and tutorials\n")
 	fmt.Printf("       karei help <command>   Detailed command documentation\n")
 	fmt.Printf("       https://docs.karei.org Web documentation\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("BUGS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("BUGS"))
 	fmt.Printf("       Report bugs: https://github.com/janderssonse/karei/issues\n\n")
 }
 
@@ -1696,14 +1674,14 @@ func (app *CLI) showDetailedCommandHelp(command string) bool {
 func (app *CLI) showThemeDocumentation() {
 	fmt.Printf("karei-theme(1)                      KAREI MANUAL                      karei-theme(1)\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("NAME"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("NAME"))
 	fmt.Printf("       karei theme - Apply coordinated themes across all applications\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SYNOPSIS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SYNOPSIS"))
 	fmt.Printf("       karei theme [theme-name]\n")
 	fmt.Printf("       karei theme list\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("DESCRIPTION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("DESCRIPTION"))
 	fmt.Printf("       The theme command applies coordinated color schemes across GNOME desktop,\n")
 	fmt.Printf("       terminal emulators, editors, and browsers. All applications using the\n")
 	fmt.Printf("       selected theme will have consistent colors and styling.\n\n")
@@ -1714,11 +1692,11 @@ func (app *CLI) showThemeDocumentation() {
 	fmt.Printf("         • Text editors (neovim, vscode)\n")
 	fmt.Printf("         • Web browsers (chrome extensions)\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("OPTIONS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("OPTIONS"))
 	fmt.Printf("       theme-name    Apply the specified theme\n")
 	fmt.Printf("       list          Show available themes with current selection\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("AVAILABLE THEMES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("AVAILABLE THEMES"))
 	fmt.Printf("       tokyo-night   Dark theme with bright accent colors\n")
 	fmt.Printf("       catppuccin    Warm, pastel color palette\n")
 	fmt.Printf("       nord          Arctic, blue-tinted theme\n")
@@ -1728,7 +1706,7 @@ func (app *CLI) showThemeDocumentation() {
 	fmt.Printf("       rose-pine     Subtle, elegant rose-tinted colors\n")
 	fmt.Printf("       gruvbox-light Light variant of gruvbox theme\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("EXAMPLES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("EXAMPLES"))
 	fmt.Printf("       Apply tokyo-night theme:\n")
 	fmt.Printf("         $ karei theme tokyo-night\n")
 	fmt.Printf("         tokyo-night\n\n")
@@ -1739,7 +1717,7 @@ func (app *CLI) showThemeDocumentation() {
 	fmt.Printf("           catppuccin\n")
 	fmt.Printf("           nord\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("TROUBLESHOOTING"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("TROUBLESHOOTING"))
 	fmt.Printf("       Theme not applied to application:\n")
 	fmt.Printf("         1. Restart the application\n")
 	fmt.Printf("         2. Check if application supports theming\n")
@@ -1750,7 +1728,7 @@ func (app *CLI) showThemeDocumentation() {
 	fmt.Printf("         2. Log out and back in\n")
 	fmt.Printf("         3. Check GNOME extensions\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SEE ALSO"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SEE ALSO"))
 	fmt.Printf("       karei-font(1), karei-verify(1)\n")
 	fmt.Printf("       https://docs.karei.org/themes\n\n")
 }
@@ -1759,15 +1737,15 @@ func (app *CLI) showThemeDocumentation() {
 func (app *CLI) showInstallDocumentation() {
 	fmt.Printf("karei-install(1)                    KAREI MANUAL                    karei-install(1)\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("NAME"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("NAME"))
 	fmt.Printf("       karei install - Install development packages and tools\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SYNOPSIS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SYNOPSIS"))
 	fmt.Printf("       karei install <packages...>\n")
 	fmt.Printf("       karei install <group>\n")
 	fmt.Printf("       karei install <language>\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("DESCRIPTION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("DESCRIPTION"))
 	fmt.Printf("       The install command manages software installation from multiple sources:\n")
 	fmt.Printf("       system packages (APT), GitHub releases, and language toolchains.\n\n")
 
@@ -1777,7 +1755,7 @@ func (app *CLI) showInstallDocumentation() {
 	fmt.Printf("         • Language toolchains (go, rust, python)\n")
 	fmt.Printf("         • Application groups (development, browsers)\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("PACKAGE TYPES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("PACKAGE TYPES"))
 	fmt.Printf("       Individual packages:\n")
 	fmt.Printf("         vim, git, curl, htop, tree, jq, unzip\n\n")
 
@@ -1791,7 +1769,7 @@ func (app *CLI) showInstallDocumentation() {
 	fmt.Printf("         media           Audio/video tools\n")
 	fmt.Printf("         productivity    Office applications\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("EXAMPLES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("EXAMPLES"))
 	fmt.Printf("       Install individual packages:\n")
 	fmt.Printf("         $ karei install vim git curl\n")
 	fmt.Printf("         vim\n")
@@ -1806,12 +1784,12 @@ func (app *CLI) showInstallDocumentation() {
 	fmt.Printf("         $ karei install username/repository\n")
 	fmt.Printf("         Cloning repository...\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("EXIT CODES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("EXIT CODES"))
 	fmt.Printf("       0     All packages installed successfully\n")
 	fmt.Printf("       22    Package installation failed\n")
 	fmt.Printf("       64    Some packages failed, others succeeded\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("SEE ALSO"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("SEE ALSO"))
 	fmt.Printf("       karei-verify(1), karei-update(1)\n")
 	fmt.Printf("       https://docs.karei.org/install\n\n")
 }
@@ -1820,10 +1798,10 @@ func (app *CLI) showInstallDocumentation() {
 func (app *CLI) showTutorial() {
 	fmt.Printf("karei tutorial - Interactive setup guide\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("WELCOME TO KAREI"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("WELCOME TO KAREI"))
 	fmt.Printf("This tutorial will guide you through setting up your Linux development environment.\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("STEP 1: SYSTEM VERIFICATION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("STEP 1: SYSTEM VERIFICATION"))
 	fmt.Printf("First, let's check your system:\n")
 	fmt.Printf("  $ karei verify\n\n")
 	fmt.Printf("This command checks for required tools and dependencies.\n")
@@ -1832,7 +1810,7 @@ func (app *CLI) showTutorial() {
 	// Wait for user input
 	_, _ = fmt.Scanln()
 
-	fmt.Printf("\n%s\n", platform.DefaultOutput.Header("STEP 2: CHOOSE A THEME"))
+	fmt.Printf("\n%s\n", console.DefaultOutput.Header("STEP 2: CHOOSE A THEME"))
 	fmt.Printf("Karei provides coordinated themes for your entire desktop:\n")
 	fmt.Printf("  $ karei theme list          # See available themes\n")
 	fmt.Printf("  $ karei theme tokyo-night   # Apply tokyo-night theme\n\n")
@@ -1841,7 +1819,7 @@ func (app *CLI) showTutorial() {
 
 	_, _ = fmt.Scanln()
 
-	fmt.Printf("\n%s\n", platform.DefaultOutput.Header("STEP 3: INSTALL DEVELOPMENT TOOLS"))
+	fmt.Printf("\n%s\n", console.DefaultOutput.Header("STEP 3: INSTALL DEVELOPMENT TOOLS"))
 	fmt.Printf("Install essential development packages:\n")
 	fmt.Printf("  $ karei install development  # Install development group\n")
 	fmt.Printf("  $ karei install vim git      # Install specific packages\n\n")
@@ -1849,7 +1827,7 @@ func (app *CLI) showTutorial() {
 
 	_, _ = fmt.Scanln()
 
-	fmt.Printf("\n%s\n", platform.DefaultOutput.Header("NEXT STEPS"))
+	fmt.Printf("\n%s\n", console.DefaultOutput.Header("NEXT STEPS"))
 	fmt.Printf("You're ready to start! Try these commands:\n\n")
 	fmt.Printf("  karei help examples     # See comprehensive examples\n")
 	fmt.Printf("  karei menu              # Interactive menu\n")
@@ -1861,7 +1839,7 @@ func (app *CLI) showTutorial() {
 func (app *CLI) showTroubleshooting() {
 	fmt.Printf("karei troubleshooting - Common problems and solutions\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("INSTALLATION ISSUES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("INSTALLATION ISSUES"))
 	fmt.Printf("Problem: Command not found after installation\n")
 	fmt.Printf("Solution:\n")
 	fmt.Printf("  1. Check PATH: echo $PATH\n")
@@ -1874,7 +1852,7 @@ func (app *CLI) showTroubleshooting() {
 	fmt.Printf("  2. User installs go to ~/.local/bin\n")
 	fmt.Printf("  3. Check file permissions: ls -la ~/.local/bin\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("THEME ISSUES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("THEME ISSUES"))
 	fmt.Printf("Problem: Theme not applied to all applications\n")
 	fmt.Printf("Solution:\n")
 	fmt.Printf("  1. Restart affected applications\n")
@@ -1887,14 +1865,14 @@ func (app *CLI) showTroubleshooting() {
 	fmt.Printf("  2. Log out and back in\n")
 	fmt.Printf("  3. Check for conflicting extensions\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("FONT ISSUES"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("FONT ISSUES"))
 	fmt.Printf("Problem: Font not applied to terminal\n")
 	fmt.Printf("Solution:\n")
 	fmt.Printf("  1. Restart terminal application\n")
 	fmt.Printf("  2. Check font installation: fc-list | grep FontName\n")
 	fmt.Printf("  3. Manually set in terminal preferences\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("GETTING HELP"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("GETTING HELP"))
 	fmt.Printf("Still having issues? Here's how to get help:\n\n")
 	fmt.Printf("  1. Check logs: karei logs errors\n")
 	fmt.Printf("  2. Run verification: karei verify all\n")
@@ -1910,7 +1888,7 @@ func (app *CLI) showTroubleshooting() {
 func (app *CLI) showFAQ() {
 	fmt.Printf("karei FAQ - Frequently Asked Questions\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("GENERAL QUESTIONS"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("GENERAL QUESTIONS"))
 	fmt.Printf("Q: What is Karei?\n")
 	fmt.Printf("A: Karei is the easiest way to set up Linux for development. It transforms\n")
 	fmt.Printf("   fresh Linux installations into fully-configured development environments\n")
@@ -1927,7 +1905,7 @@ func (app *CLI) showFAQ() {
 	fmt.Printf("A: Yes. Use 'karei uninstall <package>' to safely remove packages\n")
 	fmt.Printf("   and clean up their configurations.\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("COMPATIBILITY"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("COMPATIBILITY"))
 	fmt.Printf("Q: Which Linux distributions are supported?\n")
 	fmt.Printf("A: Currently focused on Ubuntu 20.04 LTS and newer, with planned support\n")
 	fmt.Printf("   for additional distributions. Ubuntu 22.04+ recommended for best compatibility.\n\n")
@@ -1940,7 +1918,7 @@ func (app *CLI) showFAQ() {
 	fmt.Printf("A: Yes! Terminal-only installations work fine. GUI features are\n")
 	fmt.Printf("   automatically skipped on headless systems.\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("CUSTOMIZATION"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("CUSTOMIZATION"))
 	fmt.Printf("Q: Can I create custom themes?\n")
 	fmt.Printf("A: Not yet directly, but you can:\n")
 	fmt.Printf("   • Modify themes in ~/.local/share/karei/themes/\n")
@@ -1951,7 +1929,7 @@ func (app *CLI) showFAQ() {
 	fmt.Printf("A: Create scripts in ~/.local/share/karei/install/custom/\n")
 	fmt.Printf("   Following the pattern of existing installers.\n\n")
 
-	fmt.Printf("%s\n", platform.DefaultOutput.Header("ADVANCED USAGE"))
+	fmt.Printf("%s\n", console.DefaultOutput.Header("ADVANCED USAGE"))
 	fmt.Printf("Q: Can I use Karei in scripts?\n")
 	fmt.Printf("A: Yes! Use the --json flag for machine-readable output:\n")
 	fmt.Printf("   karei --json theme tokyo-night | jq '.status'\n\n")
@@ -2214,7 +2192,7 @@ func (app *CLI) displayDevelopmentStatus(output domain.OutputPort) {
 	missingTools := []string{}
 
 	for _, tool := range essentialTools {
-		if platform.CommandExists(tool.name) {
+		if system.CommandExists(tool.name) {
 			_ = output.Info(fmt.Sprintf("  ✓ %s (%s)", tool.name, tool.description))
 
 			installedCount++
@@ -2276,10 +2254,10 @@ Navigation:
 func (app *CLI) handleTUIAction(ctx context.Context, _ *cli.Command) error {
 	if err := tui.LaunchInteractive(ctx); err != nil {
 		if app.verbose {
-			return NewExitError(ExitGeneralError, fmt.Sprintf("Failed to launch TUI: %v", err), nil)
+			return domain.NewExitError(ExitGeneralError, fmt.Sprintf("Failed to launch TUI: %v", err), nil)
 		}
 
-		return NewExitError(ExitGeneralError, "Failed to launch interactive interface (terminal required)", nil)
+		return domain.NewExitError(ExitGeneralError, "Failed to launch interactive interface (terminal required)", nil)
 	}
 
 	return nil
@@ -2359,7 +2337,7 @@ func (app *CLI) detectTerminal() string {
 func (app *CLI) detectPackageManager() string {
 	managers := []string{"apt", "yum", "dnf", "pacman", "brew"}
 	for _, mgr := range managers {
-		if platform.CommandExists(mgr) {
+		if system.CommandExists(mgr) {
 			return mgr
 		}
 	}
@@ -2427,12 +2405,12 @@ func (app *CLI) validateInstallFlags(cmd *cli.Command) (string, string, error) {
 
 	// Validate that at least one flag is provided
 	if packagesFlag == "" && groupFlag == "" {
-		return "", "", NewExitError(ExitUsageError, "specify either --packages or --group", nil)
+		return "", "", domain.NewExitError(ExitUsageError, "specify either --packages or --group", nil)
 	}
 
 	// Validate that both flags are not provided
 	if packagesFlag != "" && groupFlag != "" {
-		return "", "", NewExitError(ExitUsageError, "specify either --packages or --group, not both", nil)
+		return "", "", domain.NewExitError(ExitUsageError, "specify either --packages or --group, not both", nil)
 	}
 
 	return packagesFlag, groupFlag, nil

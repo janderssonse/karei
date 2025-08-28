@@ -25,7 +25,7 @@ type ConfigField struct {
 	Name        string
 	Label       string
 	Type        string // "select", "input", "toggle"
-	Value       interface{}
+	Value       any
 	Options     []ConfigOption
 	Description string
 }
@@ -291,8 +291,8 @@ func (m *Config) View() string {
 }
 
 // GetConfiguration returns the current configuration values.
-func (m *Config) GetConfiguration() map[string]interface{} {
-	config := make(map[string]interface{})
+func (m *Config) GetConfiguration() map[string]any {
+	config := make(map[string]any)
 
 	for _, section := range m.sections {
 		for _, field := range section.Fields {

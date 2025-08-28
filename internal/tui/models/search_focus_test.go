@@ -4,10 +4,10 @@
 package models
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/janderssonse/karei/internal/stringutil"
 	"github.com/janderssonse/karei/internal/tui/styles"
 )
 
@@ -366,7 +366,7 @@ func TestFuzzySearchAccuracy(t *testing.T) {
 	found := false
 
 	for _, app := range appsModel.filteredApps {
-		if stringutil.ContainsIgnoreCase(app.Name, "git") || stringutil.ContainsIgnoreCase(app.Description, "git") {
+		if strings.Contains(strings.ToLower(app.Name), "git") || strings.Contains(strings.ToLower(app.Description), "git") {
 			found = true
 
 			break

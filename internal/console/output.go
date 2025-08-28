@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+package console
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
-	"unsafe"
+
+	"golang.org/x/term"
 )
 
 // OutputState holds global output configuration.
@@ -31,12 +31,7 @@ func (o *OutputState) SetMode(verbose, json, plain bool) {
 
 // IsTTY checks if output is going to a terminal (not piped/redirected).
 func (o *OutputState) IsTTY(fd uintptr) bool {
-	var termios syscall.Termios
-
-	_, _, err := syscall.Syscall6(syscall.SYS_IOCTL, fd,
-		syscall.TCGETS, uintptr(unsafe.Pointer(&termios)), 0, 0, 0) //nolint:gosec
-
-	return err == 0
+	return term.IsTerminal(int(fd))
 }
 
 // Bold formats text with bold when in TTY, uppercase when piped.
@@ -65,21 +60,21 @@ func (o *OutputState) Header(text string) string {
 }
 
 // Progressf writes progress messages to stderr (only if verbose and not JSON/Plain).
-func (o *OutputState) Progressf(format string, args ...interface{}) {
+func (o *OutputState) Progressf(format string, args ...any) {
 	if o.Verbose && !o.JSON && !o.Plain {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}
 }
 
 // Successf writes success messages to stderr (only if not JSON/Plain).
-func (o *OutputState) Successf(format string, args ...interface{}) {
+func (o *OutputState) Successf(format string, args ...any) {
 	if !o.JSON && !o.Plain {
 		fmt.Fprintf(os.Stderr, "✓ "+format+"\n", args...)
 	}
 }
 
 // Warningf writes warning messages to stderr (always visible unless plain mode).
-func (o *OutputState) Warningf(format string, args ...interface{}) {
+func (o *OutputState) Warningf(format string, args ...any) {
 	if o.Plain {
 		// In plain mode, warnings go to stderr without symbols
 		fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
@@ -89,7 +84,7 @@ func (o *OutputState) Warningf(format string, args ...interface{}) {
 }
 
 // Errorf writes error messages to stderr (always visible).
-func (o *OutputState) Errorf(format string, args ...interface{}) {
+func (o *OutputState) Errorf(format string, args ...any) {
 	if o.Plain {
 		// In plain mode, errors go to stderr without symbols
 		fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
@@ -99,13 +94,13 @@ func (o *OutputState) Errorf(format string, args ...interface{}) {
 }
 
 // Result writes command results to stdout (machine-readable primary output).
-func (o *OutputState) Result(data interface{}) {
+func (o *OutputState) Result(data any) {
 	_, _ = fmt.Fprintf(os.Stdout, "%v\n", data)
 }
 
 // JSONResult writes structured JSON results to stdout.
-func (o *OutputState) JSONResult(status string, data map[string]interface{}) {
-	result := map[string]interface{}{
+func (o *OutputState) JSONResult(status string, data map[string]any) {
+	result := map[string]any{
 		"status": status,
 	}
 	for k, v := range data {
@@ -119,13 +114,13 @@ func (o *OutputState) JSONResult(status string, data map[string]interface{}) {
 }
 
 // SuccessResult outputs success result to stdout with optional stderr message.
-func (o *OutputState) SuccessResult(result interface{}, message string) {
+func (o *OutputState) SuccessResult(result any, message string) {
 	if !o.JSON && !o.Plain && message != "" {
 		o.Successf("%s", message)
 	}
 
 	if o.JSON {
-		o.JSONResult("success", map[string]interface{}{"result": result})
+		o.JSONResult("success", map[string]any{"result": result})
 	} else {
 		o.Result(result)
 	}
@@ -134,7 +129,7 @@ func (o *OutputState) SuccessResult(result interface{}, message string) {
 // ErrorResult outputs error result to stdout (for commands that need to pipe errors).
 func (o *OutputState) ErrorResult(err error, code int) {
 	if o.JSON {
-		o.JSONResult("error", map[string]interface{}{
+		o.JSONResult("error", map[string]any{
 			"error": err.Error(),
 			"code":  code,
 		})

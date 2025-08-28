@@ -14,7 +14,7 @@ import (
 
 	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/system"
 )
 
 var (
@@ -201,7 +201,7 @@ func (u *Uninstaller) uninstallMise(ctx context.Context, packageName string) err
 //nolint:cyclop // Complexity from multiple package name matching strategies
 func (u *Uninstaller) detectMisePackageName(ctx context.Context, packageName string) string {
 	// Get list of installed mise packages
-	output, err := platform.RunWithOutput(ctx, "mise", "list")
+	output, err := system.RunWithOutput(ctx, "mise", "list")
 	if err != nil {
 		// If we can't get the list, return the original name
 		return packageName
@@ -265,11 +265,11 @@ func (u *Uninstaller) runCommand(ctx context.Context, name string, args ...strin
 
 	// If it's a sudo command and we have a password, use the password-enabled method
 	if name == "sudo" && u.password != "" {
-		return platform.RunWithPassword(ctx, u.verbose, u.password, args...)
+		return system.RunWithPassword(ctx, u.verbose, u.password, args...)
 	}
 
 	// For non-sudo commands or when no password is available, use regular execution
-	return platform.Run(ctx, u.verbose, name, args...)
+	return system.Run(ctx, u.verbose, name, args...)
 }
 
 // mapToDebPackageName maps app keys to their actual DEB package names for uninstallation.
@@ -292,38 +292,17 @@ func mapToDebPackageName(appKey string) string {
 
 // uninstallGitHub removes GitHub-installed packages (all subcategories).
 func (u *Uninstaller) uninstallGitHub(_ context.Context, name string) error {
-	userBinDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
-	userShareDir := filepath.Join(os.Getenv("HOME"), ".local", "share")
+	homeDir := u.getUserHomeDir()
+	userBinDir := filepath.Join(homeDir, ".local", "bin")
+	userShareDir := filepath.Join(homeDir, ".local", "share")
 
 	// Remove binary from ~/.local/bin/
 	binPath := filepath.Join(userBinDir, name)
-	//nolint:nestif // File existence check with error handling
-	if _, err := os.Stat(binPath); err == nil {
-		if err := os.Remove(binPath); err != nil {
-			if u.verbose {
-				fmt.Printf("⚠ Failed to remove binary %s: %v\n", binPath, err)
-			} else {
-				fmt.Printf("⚠ Failed to remove binary %s\n", binPath)
-			}
-		} else if u.verbose {
-			fmt.Printf("✓ Removed binary: %s\n", binPath)
-		}
-	}
+	u.removeFile(binPath, "binary")
 
 	// For bundles and Java apps, also remove from ~/.local/share/
 	sharePath := filepath.Join(userShareDir, name)
-	//nolint:nestif // File existence check with error handling
-	if _, err := os.Stat(sharePath); err == nil {
-		if err := os.RemoveAll(sharePath); err != nil {
-			if u.verbose {
-				fmt.Printf("⚠ Failed to remove application directory %s: %v\n", sharePath, err)
-			} else {
-				fmt.Printf("⚠ Failed to remove application directory %s\n", sharePath)
-			}
-		} else if u.verbose {
-			fmt.Printf("✓ Removed application directory: %s\n", sharePath)
-		}
-	}
+	u.removeDirectory(sharePath, "application directory")
 
 	if u.verbose {
 		fmt.Printf("✓ %s removed successfully\n", name)
@@ -332,9 +311,56 @@ func (u *Uninstaller) uninstallGitHub(_ context.Context, name string) error {
 	return nil
 }
 
+// getUserHomeDir gets the user's home directory with fallback.
+func (u *Uninstaller) getUserHomeDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		homeDir = os.Getenv("HOME")
+	}
+
+	return homeDir
+}
+
+// removeFile removes a single file with logging.
+func (u *Uninstaller) removeFile(path string, description string) {
+	if _, err := os.Stat(path); err != nil {
+		return // File doesn't exist, nothing to do
+	}
+
+	if err := os.Remove(path); err != nil {
+		u.logRemovalError(description, path, err)
+	} else if u.verbose {
+		fmt.Printf("✓ Removed %s: %s\n", description, path)
+	}
+}
+
+// removeDirectory removes a directory and its contents with logging.
+func (u *Uninstaller) removeDirectory(path string, description string) {
+	if _, err := os.Stat(path); err != nil {
+		return // Directory doesn't exist, nothing to do
+	}
+
+	if err := os.RemoveAll(path); err != nil {
+		u.logRemovalError(description, path, err)
+	} else if u.verbose {
+		fmt.Printf("✓ Removed %s: %s\n", description, path)
+	}
+}
+
+// logRemovalError logs removal errors based on verbosity.
+func (u *Uninstaller) logRemovalError(description string, path string, err error) {
+	if u.verbose {
+		fmt.Printf("⚠ Failed to remove %s %s: %v\n", description, path, err)
+	} else {
+		fmt.Printf("⚠ Failed to remove %s %s\n", description, path)
+	}
+}
+
 // uninstallGeneric removes generically installed packages (binary, script, etc.).
 func (u *Uninstaller) uninstallGeneric(_ context.Context, name string) error {
-	userBinDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
+	homeDir := u.getUserHomeDir()
+	userBinDir := filepath.Join(homeDir, ".local", "bin")
 
 	// For most generic installations, just remove the binary
 	binPath := filepath.Join(userBinDir, name)

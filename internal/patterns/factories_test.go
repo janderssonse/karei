@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/system"
 	"github.com/stretchr/testify/require"
 )
 
@@ -182,11 +182,11 @@ func TestApplyThemeHandler(t *testing.T) {
 						dstPath = filepath.Join(xdgConfigHome, "zellij", "themes", testCase.theme+".kdl")
 					}
 
-					if !platform.FileExists(srcPath) {
+					if !system.FileExists(srcPath) {
 						continue
 					}
 
-					if err := platform.CopyFile(srcPath, dstPath); err != nil {
+					if err := system.CopyFile(srcPath, dstPath); err != nil {
 						return fmt.Errorf("failed to apply %s theme to %s: %w", testCase.theme, app, err)
 					}
 				}
@@ -243,11 +243,11 @@ func TestApplyFontHandler(t *testing.T) {
 						dstPath = filepath.Join(xdgConfigHome, ghosttyApp, "font.conf")
 					}
 
-					if !platform.FileExists(srcPath) {
+					if !system.FileExists(srcPath) {
 						continue
 					}
 
-					if err := platform.CopyFile(srcPath, dstPath); err != nil {
+					if err := system.CopyFile(srcPath, dstPath); err != nil {
 						return fmt.Errorf("failed to apply %s font to %s: %w", testCase.font, app, err)
 					}
 				}

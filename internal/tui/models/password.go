@@ -12,7 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/system"
 	"github.com/janderssonse/karei/internal/tui/styles"
 )
 
@@ -260,7 +260,7 @@ func (m *PasswordPrompt) handlePasswordValidation(msg PasswordValidationMsg) (te
 
 		// Use sudo -v to validate password - this always requires password verification
 		// even if recent sudo cache exists, unlike 'sudo true'
-		err := platform.RunWithPassword(ctx, false, msg.Password, "-v")
+		err := system.RunWithPassword(ctx, false, msg.Password, "-v")
 		if err != nil {
 			return PasswordValidationResult{
 				Valid:      false,

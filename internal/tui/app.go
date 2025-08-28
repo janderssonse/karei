@@ -585,7 +585,7 @@ func (a *App) navigateToNextScreen() (tea.Model, tea.Cmd) {
 // navigateToScreen handles navigation to a specific screen.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) navigateToScreen(targetScreen Screen, data interface{}) (tea.Model, tea.Cmd) {
+func (a *App) navigateToScreen(targetScreen Screen, data any) (tea.Model, tea.Cmd) {
 	// Progress and Password screens should always be created fresh (idiomatic Elm pattern)
 	if targetScreen == ProgressScreen || targetScreen == PasswordScreen {
 		// Remove any stale cached instance (idiomatic cleanup)
@@ -609,7 +609,7 @@ func (a *App) navigateToScreen(targetScreen Screen, data interface{}) (tea.Model
 // useCachedModel switches to a cached model and updates its size.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) useCachedModel(targetScreen Screen, cachedModel tea.Model, data interface{}) (tea.Model, tea.Cmd) {
+func (a *App) useCachedModel(targetScreen Screen, cachedModel tea.Model, data any) (tea.Model, tea.Cmd) {
 	a.currentScreen = targetScreen
 	a.contentModel = cachedModel
 
@@ -646,7 +646,7 @@ func (a *App) useCachedModel(targetScreen Screen, cachedModel tea.Model, data in
 }
 
 // handleAppsScreenData handles data passing for Apps screen.
-func (a *App) handleAppsScreenData(data interface{}, targetScreen Screen) tea.Cmd {
+func (a *App) handleAppsScreenData(data any, targetScreen Screen) tea.Cmd {
 	appsModel, ok := a.contentModel.(*models.AppsModel)
 	if !ok {
 		return nil
@@ -675,7 +675,7 @@ func (a *App) handleAppsScreenData(data interface{}, targetScreen Screen) tea.Cm
 // createModelForScreen creates a new model based on the screen type.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) createModelForScreen(screen Screen, data interface{}) tea.Model {
+func (a *App) createModelForScreen(screen Screen, data any) tea.Model {
 	switch screen {
 	case MenuScreen:
 		return models.NewMenu(a.styles)
@@ -701,7 +701,7 @@ func (a *App) createModelForScreen(screen Screen, data interface{}) tea.Model {
 // setupNewModel initializes and caches a new model.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) setupNewModel(newModel tea.Model, targetScreen Screen, data interface{}) (tea.Model, tea.Cmd) {
+func (a *App) setupNewModel(newModel tea.Model, targetScreen Screen, data any) (tea.Model, tea.Cmd) {
 	// Cache the new model (except progress and password which are always fresh)
 	if targetScreen != ProgressScreen && targetScreen != PasswordScreen {
 		a.models[targetScreen] = newModel
@@ -758,7 +758,7 @@ func (a *App) handleWindowSizing(targetScreen Screen) tea.Cmd {
 }
 
 // handleRefreshStatus handles refresh status requests for Apps screen.
-func (a *App) handleRefreshStatus(targetScreen Screen, data interface{}) tea.Cmd {
+func (a *App) handleRefreshStatus(targetScreen Screen, data any) tea.Cmd {
 	if targetScreen != AppsScreen || data != models.RefreshStatusData {
 		return nil
 	}
@@ -785,7 +785,7 @@ func (a *App) createAppsModel() tea.Model {
 // createProgressModel creates a progress model handling different data formats.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) createProgressModel(data interface{}) tea.Model {
+func (a *App) createProgressModel(data any) tea.Model {
 	// Handle progress data with password
 	if progressData, ok := data.(models.ProgressData); ok {
 		return models.NewProgressWithOperationsAndPassword(a.ctx, a.styles, progressData.Operations, progressData.Password)
@@ -805,7 +805,7 @@ func (a *App) createProgressModel(data interface{}) tea.Model {
 // createPasswordModel creates a password model with operation data.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
-func (a *App) createPasswordModel(data interface{}) tea.Model {
+func (a *App) createPasswordModel(data any) tea.Model {
 	if operations, ok := data.([]models.SelectedOperation); ok {
 		return models.NewPasswordPrompt(a.ctx, a.styles, operations)
 	}

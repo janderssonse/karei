@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+package config
 
 import (
 	"os"
@@ -90,12 +90,37 @@ func ExpandPath(path string) string {
 
 // ExpandPathWithEnv expands paths with custom XDG environment variables for testing.
 func ExpandPathWithEnv(path, xdgConfigHome, xdgDataHome string) string {
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
+	// Handle tilde expansion
+	if expandedHome := expandHomeDir(path); expandedHome != path {
+		return expandedHome
 	}
 
+	// Handle XDG variables
+	if expandedXDG := expandXDGVar(path, xdgConfigHome, xdgDataHome); expandedXDG != path {
+		return expandedXDG
+	}
+
+	return path
+}
+
+func expandHomeDir(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+
+		if path == "~" {
+			return home
+		}
+
+		return filepath.Join(home, path[2:])
+	}
+
+	return path
+}
+
+func expandXDGVar(path, xdgConfigHome, xdgDataHome string) string {
 	if strings.HasPrefix(path, "$XDG_CONFIG_HOME") {
 		configHome := xdgConfigHome
 		if configHome == "" {

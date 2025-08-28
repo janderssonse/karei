@@ -27,19 +27,19 @@ type PackageDB struct {
 
 // PackageMetadata contains comprehensive package information.
 type PackageMetadata struct {
-	Name         string                 `json:"name"`
-	Version      string                 `json:"version"`
-	Description  string                 `json:"description"`
-	Size         int64                  `json:"size"`
-	Architecture string                 `json:"architecture"`
-	Section      string                 `json:"section"`
-	Priority     string                 `json:"priority"`
-	Maintainer   string                 `json:"maintainer"`
-	Dependencies []string               `json:"dependencies"`
-	Available    bool                   `json:"available"`
-	Method       domain.InstallMethod   `json:"method"`
-	Source       string                 `json:"source"`
-	ExtraData    map[string]interface{} `json:"extra_data,omitempty"`
+	Name         string               `json:"name"`
+	Version      string               `json:"version"`
+	Description  string               `json:"description"`
+	Size         int64                `json:"size"`
+	Architecture string               `json:"architecture"`
+	Section      string               `json:"section"`
+	Priority     string               `json:"priority"`
+	Maintainer   string               `json:"maintainer"`
+	Dependencies []string             `json:"dependencies"`
+	Available    bool                 `json:"available"`
+	Method       domain.InstallMethod `json:"method"`
+	Source       string               `json:"source"`
+	ExtraData    map[string]any       `json:"extra_data,omitempty"`
 }
 
 // RepositoryInfo contains repository metadata.
@@ -229,8 +229,8 @@ func (db *PackageDB) SearchPackages(query string) []PackageMetadata {
 }
 
 // GetStatistics returns database statistics.
-func (db *PackageDB) GetStatistics() map[string]interface{} {
-	stats := make(map[string]interface{})
+func (db *PackageDB) GetStatistics() map[string]any {
+	stats := make(map[string]any)
 
 	stats["total_packages"] = len(db.packages)
 	stats["github_releases"] = len(db.githubReleases)
@@ -284,7 +284,7 @@ func (db *PackageDB) ValidateDatabase() []string {
 
 // ExportToJSON exports the database to JSON format.
 func (db *PackageDB) ExportToJSON(filename string) error {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"packages":        db.packages,
 		"dependencies":    db.dependencies,
 		"repositories":    db.repositories,

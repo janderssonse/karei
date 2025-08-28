@@ -57,7 +57,7 @@ func NewOutputAdapterWithWriter(writer io.Writer, format OutputFormat, quiet boo
 }
 
 // Success outputs a success message with optional structured data.
-func (o *OutputAdapter) Success(message string, data interface{}) error {
+func (o *OutputAdapter) Success(message string, data any) error {
 	if o.quiet && data == nil {
 		return nil
 	}
@@ -125,7 +125,7 @@ func (o *OutputAdapter) Table(headers []string, rows [][]string) error {
 	}
 
 	if o.format == JSONFormat {
-		tableData := map[string]interface{}{
+		tableData := map[string]any{
 			"headers": headers,
 			"rows":    rows,
 		}
@@ -162,7 +162,7 @@ func (o *OutputAdapter) IsQuiet() bool {
 }
 
 // outputJSON outputs data as JSON.
-func (o *OutputAdapter) outputJSON(data interface{}) error {
+func (o *OutputAdapter) outputJSON(data any) error {
 	encoder := json.NewEncoder(o.writer)
 	encoder.SetIndent("", "  ")
 

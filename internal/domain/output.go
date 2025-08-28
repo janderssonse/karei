@@ -9,7 +9,7 @@ import "time"
 // This is a domain port that adapters implement for different output formats.
 type OutputPort interface {
 	// Success outputs a success message with optional structured data
-	Success(message string, data interface{}) error
+	Success(message string, data any) error
 
 	// Error outputs an error message
 	Error(message string) error

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/platform"
+	"github.com/janderssonse/karei/internal/network"
 )
 
 // Static error definitions for err113 compliance.
@@ -364,7 +364,7 @@ func (p *PackageInstaller) installAPT(ctx context.Context, pkg *domain.Package) 
 	}
 
 	// Update package lists with proxy settings
-	updateArgs := append([]string{"apt-get"}, platform.ConfigureAPTProxy()...)
+	updateArgs := append([]string{"apt-get"}, network.ConfigureAPTProxy()...)
 
 	updateArgs = append(updateArgs, "update")
 	if err := p.commandRunner.ExecuteSudo(ctx, updateArgs[0], updateArgs[1:]...); err != nil {
@@ -372,7 +372,7 @@ func (p *PackageInstaller) installAPT(ctx context.Context, pkg *domain.Package) 
 	}
 
 	// Install package with proxy settings
-	installArgs := append([]string{"apt-get"}, platform.ConfigureAPTProxy()...)
+	installArgs := append([]string{"apt-get"}, network.ConfigureAPTProxy()...)
 	installArgs = append(installArgs, "install", "-y", pkg.Source)
 
 	return p.commandRunner.ExecuteSudo(ctx, installArgs[0], installArgs[1:]...)
@@ -680,7 +680,7 @@ func (p *PackageInstaller) downloadDEBFile(ctx context.Context, url string) (str
 	// Download progress handled by TUI
 
 	// Create HTTP client with timeout and proxy support
-	client := platform.GetHTTPClient()
+	client := network.GetHTTPClient()
 	client.Timeout = 15 * time.Minute // Allow up to 15 minutes for large downloads like Chrome DEB
 
 	// Create request with context
@@ -1106,9 +1106,13 @@ func (p *PackageInstaller) addPackageToAquaConfig(configPath, aquaPackage string
 // Helper methods for system information
 
 func (p *PackageInstaller) getUserBinDir() string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = "/home/" + os.Getenv("USER")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		home = os.Getenv("HOME")
+		if home == "" {
+			home = "/home/" + os.Getenv("USER")
+		}
 	}
 
 	return filepath.Join(home, ".local", "bin")
@@ -1119,9 +1123,13 @@ func (p *PackageInstaller) getXDGConfigHome() string {
 		return xdg
 	}
 
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = "/home/" + os.Getenv("USER")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to environment variable
+		home = os.Getenv("HOME")
+		if home == "" {
+			home = "/home/" + os.Getenv("USER")
+		}
 	}
 
 	return filepath.Join(home, ".config")
@@ -1134,7 +1142,7 @@ func (p *PackageInstaller) downloadFile(ctx context.Context, url, destPath strin
 	}
 
 	// Create HTTP client with proxy support - let context handle cancellation
-	client := platform.GetHTTPClient()
+	client := network.GetHTTPClient()
 
 	// Create request with context (context handles timeout and cancellation)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

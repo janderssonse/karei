@@ -13,12 +13,15 @@ import (
 const testAppChrome = "chrome"
 
 // updateTUIAppWithAssertion is a helper function to handle type assertions safely.
-func updateTUIAppWithAssertion(app *App, msg tea.Msg) (*App, tea.Cmd) {
+func updateTUIAppWithAssertion(t *testing.T, app *App, msg tea.Msg) (*App, tea.Cmd) {
+	t.Helper()
+
 	model, cmd := app.Update(msg)
 
 	appModel, ok := model.(*App)
 	if !ok {
-		panic("Expected *App from Update")
+		t.Fatalf("Expected *App from Update, got %T", model)
+		return nil, nil // This won't execute but satisfies compiler
 	}
 
 	return appModel, cmd
@@ -35,10 +38,10 @@ func TestNavigationRefreshFlow(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen first
-	app, cmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, cmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
 	if cmd != nil {
 		// Process any initialization commands
-		app, _ = updateTUIAppWithAssertion(app, cmd())
+		app, _ = updateTUIAppWithAssertion(t, app, cmd())
 	}
 
 	// Verify we're on apps screen
@@ -51,9 +54,9 @@ func TestNavigationRefreshFlow(t *testing.T) {
 		{AppKey: testAppChrome, Operation: models.StateInstall, AppName: "Chrome"},
 	}
 
-	app, cmd = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, cmd = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 	if cmd != nil {
-		app, _ = updateTUIAppWithAssertion(app, cmd())
+		app, _ = updateTUIAppWithAssertion(t, app, cmd())
 	}
 
 	// Verify we're on progress screen
@@ -63,7 +66,7 @@ func TestNavigationRefreshFlow(t *testing.T) {
 
 	// Test: Navigate back to apps screen with refresh data (simulating ESC from progress)
 	refreshData := models.RefreshStatusData
-	app, cmd = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: refreshData})
+	app, cmd = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: refreshData})
 
 	// Verify navigation succeeded and we're back on apps screen
 	if app.currentScreen != AppsScreen {
@@ -97,7 +100,7 @@ func TestSameScreenNavigationWithData(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
 
 	// Verify we're on apps screen
 	if app.currentScreen != AppsScreen {
@@ -106,7 +109,7 @@ func TestSameScreenNavigationWithData(t *testing.T) {
 
 	// Test: Navigate to same screen with refresh data (should be allowed)
 	refreshData := models.RefreshStatusData
-	app, cmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: refreshData})
+	app, cmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: refreshData})
 
 	// Should still be on apps screen
 	if app.currentScreen != AppsScreen {
@@ -128,13 +131,13 @@ func TestSameScreenNavigationWithoutData(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
 
 	// Store reference to current model
 	originalModel := app.contentModel
 
 	// Test: Navigate to same screen without data (should be blocked)
-	app, cmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, cmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
 
 	// Should still be on apps screen
 	if app.currentScreen != AppsScreen {
@@ -161,13 +164,13 @@ func TestRefreshStatusMessage(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, initCmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, initCmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
 	if initCmd != nil {
-		app, _ = updateTUIAppWithAssertion(app, initCmd())
+		app, _ = updateTUIAppWithAssertion(t, app, initCmd())
 	}
 
 	// Send window size to ensure model is ready
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	// Get the apps model
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
@@ -205,9 +208,9 @@ func TestProgressScreenRefreshNavigation(t *testing.T) {
 	}
 
 	// Navigate to progress screen
-	app, cmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, cmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 	if cmd != nil {
-		app, _ = updateTUIAppWithAssertion(app, cmd())
+		app, _ = updateTUIAppWithAssertion(t, app, cmd())
 	}
 
 	// Verify we're on progress screen
@@ -222,7 +225,7 @@ func TestProgressScreenRefreshNavigation(t *testing.T) {
 		Data:   models.RefreshStatusData,
 	}
 
-	app, refreshCmd := updateTUIAppWithAssertion(app, refreshMsg)
+	app, refreshCmd := updateTUIAppWithAssertion(t, app, refreshMsg)
 
 	// Should be back on apps screen
 	if app.currentScreen != AppsScreen {
@@ -250,8 +253,8 @@ func TestModelCachingWithRefresh(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen and cache the model
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	// Store reference to cached model
 	originalModel := app.contentModel
@@ -263,10 +266,10 @@ func TestModelCachingWithRefresh(t *testing.T) {
 	operations := []models.SelectedOperation{
 		{AppKey: "test", Operation: models.StateInstall, AppName: "Test"},
 	}
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 
 	// Navigate back with refresh - should use cached model but allow refresh
-	app, refreshCmd := updateTUIAppWithAssertion(app, models.NavigateMsg{
+	app, refreshCmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{
 		Screen: models.AppsScreen,
 		Data:   models.RefreshStatusData,
 	})
@@ -300,8 +303,8 @@ func TestSelectionStateClearing(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	// Get the apps model
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
@@ -399,8 +402,8 @@ func TestUninstallSelectionStateClearing(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	// Get the apps model
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
@@ -441,8 +444,8 @@ func TestCompleteInstallationFlow(t *testing.T) {
 	app.height = 40
 
 	// Step 1: Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
 	if !isApps {
@@ -462,7 +465,7 @@ func TestCompleteInstallationFlow(t *testing.T) {
 	operations := []models.SelectedOperation{
 		{AppKey: testAppChrome, Operation: models.StateInstall, AppName: "Chrome"},
 	}
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 
 	if app.currentScreen != ProgressScreen {
 		t.Errorf("Expected to be on ProgressScreen, got %v", app.currentScreen)
@@ -470,7 +473,7 @@ func TestCompleteInstallationFlow(t *testing.T) {
 
 	// Step 4: Simulate installation completion and Chrome status update
 	// First navigate back to apps screen (this caches the apps model)
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: models.RefreshStatusData})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: models.RefreshStatusData})
 
 	// Get the updated apps model
 	updatedAppsModel, isAppsModel := app.contentModel.(*models.AppsModel)
@@ -543,8 +546,8 @@ func TestImmediateSynchronization(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
 	if !isApps {
@@ -566,7 +569,7 @@ func TestImmediateSynchronization(t *testing.T) {
 	}
 
 	completedMsg := models.CompletedOperationsMsg{Operations: operations}
-	app, cmd := updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: completedMsg})
+	app, cmd := updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: completedMsg})
 
 	// Should be immediate - no delay, no commands needed for the status update
 	if cmd != nil {
@@ -631,8 +634,8 @@ func TestUninstallationFlow(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
 	if !isApps {
@@ -652,7 +655,7 @@ func TestUninstallationFlow(t *testing.T) {
 	operations := []models.SelectedOperation{
 		{AppKey: testAppChrome, Operation: models.StateUninstall, AppName: "Chrome"},
 	}
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 
 	if app.currentScreen != ProgressScreen {
 		t.Errorf("Expected to be on ProgressScreen, got %v", app.currentScreen)
@@ -681,7 +684,7 @@ func TestUninstallationFlow(t *testing.T) {
 
 	// Step 4: Test immediate synchronization on return (simulates ESC after completion)
 	completedMsg := models.CompletedOperationsMsg{Operations: operations}
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: completedMsg})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: completedMsg})
 
 	// Get the updated apps model
 	finalAppsModel, ok := app.contentModel.(*models.AppsModel)
@@ -742,8 +745,8 @@ func TestEnhancedUninstallationUX(t *testing.T) {
 	app.height = 40
 
 	// Navigate to apps screen and select Chrome for uninstallation
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
-	app, _ = updateTUIAppWithAssertion(app, tea.WindowSizeMsg{Width: 80, Height: 40})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.AppsScreen, Data: nil})
+	app, _ = updateTUIAppWithAssertion(t, app, tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	appsModel, isApps := app.contentModel.(*models.AppsModel)
 	if !isApps {
@@ -756,7 +759,7 @@ func TestEnhancedUninstallationUX(t *testing.T) {
 	operations := []models.SelectedOperation{
 		{AppKey: testAppChrome, Operation: models.StateUninstall, AppName: "Chrome"},
 	}
-	app, _ = updateTUIAppWithAssertion(app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
+	app, _ = updateTUIAppWithAssertion(t, app, models.NavigateMsg{Screen: models.ProgressScreen, Data: operations})
 
 	progressModel, isProgressModel := app.contentModel.(*models.Progress)
 	if !isProgressModel {

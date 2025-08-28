@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-package platform
+package console
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -149,4 +152,29 @@ func TestPromptConsentAutoYes(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, result)
+}
+
+// promptConsentWithReader is a testable version of prompt consent.
+// It accepts custom reader and writer for testing.
+func PromptConsentWithReader(prompt string, autoYes bool, reader io.Reader, writer io.Writer) (bool, error) {
+	// If auto-yes is set, immediately return true
+	if autoYes {
+		_, _ = fmt.Fprintf(writer, "Auto-accepting: %s\n", prompt)
+		return true, nil
+	}
+
+	// Show prompt
+	_, _ = fmt.Fprintf(writer, "%s [y/N]: ", prompt)
+
+	// Read response
+	bufReader := bufio.NewReader(reader)
+
+	response, err := bufReader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+
+	return response == ConsentY || response == ConsentYes, nil
 }

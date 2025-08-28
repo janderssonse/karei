@@ -4,11 +4,12 @@
 package fonts
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/janderssonse/karei/internal/stringutil"
 )
 
 func TestNewSizeManager(t *testing.T) {
@@ -117,7 +118,7 @@ func TestSetAndGetFontSize(t *testing.T) {
 
 	// Verify config file was created
 	configPath := filepath.Join(tmpHome, ".config", "ghostty", "font-size.conf")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); errors.Is(err, fs.ErrNotExist) {
 		t.Error("Config file was not created")
 	}
 
@@ -200,7 +201,7 @@ func TestGetFontSizeDisplay(t *testing.T) {
 	}
 
 	// Should contain the current size with arrow indicator
-	if !stringutil.Contains(display, "▶ 14") {
+	if !strings.Contains(display, "▶ 14") {
 		t.Errorf("Display should indicate current size 14, got: %s", display)
 	}
 }
@@ -222,7 +223,7 @@ func TestSetFontSizeForAllTerminals(t *testing.T) {
 
 	// Verify Ghostty config was created
 	ghosttyPath := filepath.Join(tmpHome, ".config", "ghostty", "font-size.conf")
-	if _, err := os.Stat(ghosttyPath); os.IsNotExist(err) {
+	if _, err := os.Stat(ghosttyPath); errors.Is(err, fs.ErrNotExist) {
 		t.Error("Ghostty config file was not created")
 	}
 

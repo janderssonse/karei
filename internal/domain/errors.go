@@ -17,8 +17,33 @@ var (
 	ErrDependencyMissing = errors.New("dependency missing")
 )
 
-// ErrorInfo provides user-friendly error information.
-type ErrorInfo struct {
+// ExitError provides specific exit codes for different failure modes.
+type ExitError struct {
+	Code    int
+	Message string
+	Err     error
+}
+
+// NewExitError creates an ExitError with the specified code and message.
+func NewExitError(code int, message string, err error) *ExitError {
+	return &ExitError{
+		Code:    code,
+		Message: message,
+		Err:     err,
+	}
+}
+
+// Error implements the error interface.
+func (e *ExitError) Error() string {
+	if e.Err != nil {
+		return e.Message + ": " + e.Err.Error()
+	}
+
+	return e.Message
+}
+
+// errorInfo provides user-friendly error information.
+type errorInfo struct {
 	Message     string   // User-friendly message
 	Suggestions []string // Actionable suggestions
 	ShowDetails bool     // Whether to show technical details
@@ -27,16 +52,16 @@ type ErrorInfo struct {
 // getErrorMatchers returns error patterns and their corresponding info.
 func getErrorMatchers() []struct {
 	patterns []string
-	getInfo  func(string, bool) ErrorInfo
+	getInfo  func(string, bool) errorInfo
 } {
 	return []struct {
 		patterns []string
-		getInfo  func(string, bool) ErrorInfo
+		getInfo  func(string, bool) errorInfo
 	}{
 		{
 			patterns: []string{"permission", "denied", "sudo", "root"},
-			getInfo: func(_ string, verbose bool) ErrorInfo {
-				return ErrorInfo{
+			getInfo: func(_ string, verbose bool) errorInfo {
+				return errorInfo{
 					Message:     "Permission denied",
 					Suggestions: []string{"Try running with sudo", "Check that your user has admin privileges"},
 					ShowDetails: verbose,
@@ -45,8 +70,8 @@ func getErrorMatchers() []struct {
 		},
 		{
 			patterns: []string{"network", "connection", "timeout", "no such host"},
-			getInfo: func(_ string, verbose bool) ErrorInfo {
-				return ErrorInfo{
+			getInfo: func(_ string, verbose bool) errorInfo {
+				return errorInfo{
 					Message:     "Network connection failed",
 					Suggestions: []string{"Check your internet connection", "Try again in a few moments"},
 					ShowDetails: verbose,
@@ -55,15 +80,15 @@ func getErrorMatchers() []struct {
 		},
 		{
 			patterns: []string{"not found", "no such", "unable to locate"},
-			getInfo: func(pkg string, verbose bool) ErrorInfo {
+			getInfo: func(pkg string, verbose bool) errorInfo {
 				if pkg != "" {
-					return ErrorInfo{
+					return errorInfo{
 						Message:     "Package '" + pkg + "' not found",
 						Suggestions: []string{"Check the package name spelling", "Update package lists: sudo apt update"},
 						ShowDetails: verbose,
 					}
 				}
-				return ErrorInfo{
+				return errorInfo{
 					Message:     "Package not found",
 					Suggestions: []string{"Verify the package name", "Update your package lists"},
 					ShowDetails: verbose,
@@ -72,8 +97,8 @@ func getErrorMatchers() []struct {
 		},
 		{
 			patterns: []string{"already installed", "is installed"},
-			getInfo: func(_ string, verbose bool) ErrorInfo {
-				return ErrorInfo{
+			getInfo: func(_ string, verbose bool) errorInfo {
+				return errorInfo{
 					Message:     "Already installed",
 					Suggestions: []string{"Package is already on your system"},
 					ShowDetails: verbose,
@@ -82,8 +107,8 @@ func getErrorMatchers() []struct {
 		},
 		{
 			patterns: []string{"not installed", "is not installed"},
-			getInfo: func(_ string, verbose bool) ErrorInfo {
-				return ErrorInfo{
+			getInfo: func(_ string, verbose bool) errorInfo {
+				return errorInfo{
 					Message:     "Not installed",
 					Suggestions: []string{"Package is not on your system", "Use 'karei list' to see installed packages"},
 					ShowDetails: verbose,
@@ -92,8 +117,8 @@ func getErrorMatchers() []struct {
 		},
 		{
 			patterns: []string{"dependency", "depends", "requires"},
-			getInfo: func(_ string, verbose bool) ErrorInfo {
-				return ErrorInfo{
+			getInfo: func(_ string, verbose bool) errorInfo {
+				return errorInfo{
 					Message:     "Missing dependencies",
 					Suggestions: []string{"Install required dependencies first", "Try: sudo apt --fix-broken install"},
 					ShowDetails: verbose,
@@ -103,10 +128,10 @@ func getErrorMatchers() []struct {
 	}
 }
 
-// GetErrorInfo analyzes an error and returns user-friendly information.
-func GetErrorInfo(err error, packageName string, verbose bool) ErrorInfo {
+// getErrorInfo analyzes an error and returns user-friendly information.
+func getErrorInfo(err error, packageName string, verbose bool) errorInfo {
 	if err == nil {
-		return ErrorInfo{}
+		return errorInfo{}
 	}
 
 	errStr := strings.ToLower(err.Error())
@@ -121,7 +146,7 @@ func GetErrorInfo(err error, packageName string, verbose bool) ErrorInfo {
 	}
 
 	// Generic error - show details in verbose mode
-	return ErrorInfo{
+	return errorInfo{
 		Message:     "Operation failed",
 		Suggestions: []string{"Run with --verbose for more details"},
 		ShowDetails: verbose,
@@ -130,7 +155,7 @@ func GetErrorInfo(err error, packageName string, verbose bool) ErrorInfo {
 
 // FormatErrorMessage formats an error for display.
 func FormatErrorMessage(err error, packageName string, verbose bool) string {
-	info := GetErrorInfo(err, packageName, verbose)
+	info := getErrorInfo(err, packageName, verbose)
 
 	var result strings.Builder
 
