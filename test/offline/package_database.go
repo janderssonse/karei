@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package offline provides offline testing support for package management.
+// Package offline implements mock package database for offline testing.
 package offline
 
 import (
@@ -25,7 +25,7 @@ type PackageDB struct {
 	verbose        bool
 }
 
-// PackageMetadata contains comprehensive package information.
+// PackageMetadata contains package information for offline testing.
 type PackageMetadata struct {
 	Name         string               `json:"name"`
 	Version      string               `json:"version"`

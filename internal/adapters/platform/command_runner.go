@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package platform provides shared command execution functionality.
+// Package platform implements cross-platform command execution.
 package platform
 
 import (

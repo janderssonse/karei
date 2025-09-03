@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package domain defines the ports (interfaces) for the hexagonal architecture.
 package domain
 
 import (
@@ -17,7 +16,7 @@ var (
 )
 
 // PackageInstaller defines the interface for package installation operations.
-// This is implemented by adapters for different package managers (apt, dnf, etc.).
+// Implemented by adapters for different package managers (apt, dnf, etc.).
 type PackageInstaller interface {
 	// Install installs a package on the system.
 	Install(ctx context.Context, pkg *Package) (*InstallationResult, error)
@@ -36,9 +35,8 @@ type PackageInstaller interface {
 }
 
 // SystemDetector defines the interface for system detection operations.
-// This is implemented by adapters that can detect system information.
 type SystemDetector interface {
-	// DetectSystem returns comprehensive system information.
+	// DetectSystem returns system information.
 	DetectSystem(ctx context.Context) (*SystemInfo, error)
 
 	// DetectDistribution returns the Linux distribution information.
@@ -52,7 +50,6 @@ type SystemDetector interface {
 }
 
 // CommandRunner defines the interface for executing system commands.
-// This is implemented by adapters that can run commands (real or mock).
 type CommandRunner interface {
 	// Execute runs a command and returns the result.
 	Execute(ctx context.Context, name string, args ...string) error
@@ -68,7 +65,6 @@ type CommandRunner interface {
 }
 
 // FileManager defines the interface for file operations.
-// This is implemented by adapters that can manage files and directories.
 type FileManager interface {
 	// FileExists checks if a file exists.
 	FileExists(path string) bool
@@ -87,4 +83,10 @@ type FileManager interface {
 
 	// RemoveFile removes a file.
 	RemoveFile(path string) error
+}
+
+// NetworkClient defines the interface for network operations.
+type NetworkClient interface {
+	// DownloadFile downloads a file from a URL to a destination path.
+	DownloadFile(ctx context.Context, url, destPath string) error
 }

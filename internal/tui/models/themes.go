@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides theme selection screen for the TUI interface.
+// Package models implements theme selection and preview UI.
 package models
 
 import (

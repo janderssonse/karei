@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package cli provides output adapters for CLI operations.
+// Package cli implements output formatting for command-line operations.
 package cli
 
 import (

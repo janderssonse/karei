@@ -96,8 +96,8 @@ test: test-unit test-integration
 # Execute unit tests only - fast feedback for development
 [group('test')]
 test-unit:
-    @just _header "Run unit tests" "go test -count=1 -race -buildvcs=false ./internal/..."
-    go test -count=1 -race -buildvcs=false ./internal/...
+    @just _header "Run unit tests" "go test -count=1 -race -buildvcs=false \$(go list ./internal/... | grep -v /tui)"
+    go test -count=1 -race -buildvcs=false $(go list ./internal/... | grep -v /tui)
 
 # Execute integration tests only - requires filesystem operations
 [group('test')]

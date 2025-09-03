@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides help system for the TUI interface.
+// Package models implements contextual help and keyboard shortcut UI.
 package models
 
 import (
@@ -111,7 +111,7 @@ func NewHelp(styleConfig *styles.Styles) *Help {
 
 ## Welcome to Karei! 🐟
 
-Karei is a **comprehensive Linux development environment automation system** that transforms fresh Linux installations into fully-configured, modern workstations.
+Karei automates Linux development environment setup.
 
 ### Quick Start
 

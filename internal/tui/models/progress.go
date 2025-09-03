@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides installation progress screen for the TUI interface.
+// Package models implements installation progress tracking UI.
 //
 //nolint:funcorder // Methods grouped logically by functionality for better readability
 package models
@@ -472,10 +472,6 @@ func (m *Progress) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cm
 
 // Legacy handleKeyInput - kept for compatibility.
 //
-
-func (m *Progress) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	return m.handleKeyMsg(msg)
-}
 
 // handleCompletedTask processes completed task message and returns error model if needed.
 //

@@ -45,7 +45,7 @@ func RunSilent(ctx context.Context, name string, args ...string) error {
 }
 
 // RunWithPassword executes a sudo command with password provided via stdin.
-// This avoids interactive password prompts by using sudo's -S flag.
+// Uses sudo's -S flag to avoid interactive password prompts.
 func RunWithPassword(ctx context.Context, verbose bool, password string, args ...string) error {
 	if verbose {
 		// Don't print password in verbose mode!

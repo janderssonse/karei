@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package platform provides shared adapters that work across distributions.
+// Package platform implements cross-distribution system detection adapters.
 package platform
 
 import (
@@ -28,7 +28,7 @@ func NewSystemDetector(commandRunner domain.CommandRunner, fileManager domain.Fi
 	}
 }
 
-// DetectSystem returns comprehensive system information.
+// DetectSystem returns system information.
 func (d *SystemDetector) DetectSystem(ctx context.Context) (*domain.SystemInfo, error) {
 	distribution, err := d.DetectDistribution(ctx)
 	if err != nil {

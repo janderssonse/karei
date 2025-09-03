@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides shared navigation types for TUI models.
+// Package models defines shared navigation messages between UI screens.
 package models
 
 // NavigateMsg is a message sent to request navigation to a specific screen.

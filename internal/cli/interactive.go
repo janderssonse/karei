@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package cli provides interactive command-line interface functionality for Karei.
 package cli
 
 import (
@@ -377,41 +376,4 @@ func (app *CLI) selectEmojiForGroup(group string) string {
 	}
 
 	return "⬛"
-}
-
-func (app *CLI) createUniversalManager(managerType string, verbose bool) any {
-	switch managerType {
-	case ManagerTypeTheme:
-		return app.getThemeManager(verbose)
-	case ManagerTypeFont:
-		return app.getFontManager(verbose)
-	default:
-		return nil
-	}
-}
-
-func (app *CLI) getThemeManager(_ bool) any {
-	// Return theme manager - simplified for now
-	return struct {
-		Apply func(string) error
-	}{
-		Apply: func(theme string) error {
-			fmt.Printf("Applied theme: %s\n", theme)
-
-			return nil
-		},
-	}
-}
-
-func (app *CLI) getFontManager(_ bool) any {
-	// Return font manager - simplified for now
-	return struct {
-		Apply func(string) error
-	}{
-		Apply: func(font string) error {
-			fmt.Printf("Applied font: %s\n", font)
-
-			return nil
-		},
-	}
 }

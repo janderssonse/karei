@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package uninstall provides application removal functionality.
 package uninstall
 
 import (
@@ -29,17 +28,19 @@ var (
 // Uninstaller handles application uninstallation.
 type Uninstaller struct {
 	verbose  bool
-	password string // Sudo password for non-interactive uninstallation
+	password string // For non-interactive sudo operations
+	executor CommandExecutor
 }
 
-// NewUninstaller creates a new uninstaller with the specified verbosity.
+// NewUninstaller initializes an uninstaller with the specified verbosity level.
 func NewUninstaller(verbose bool) *Uninstaller {
 	return &Uninstaller{
-		verbose: verbose,
+		verbose:  verbose,
+		executor: &RealCommandExecutor{},
 	}
 }
 
-// SetPassword sets the sudo password for non-interactive uninstallation.
+// SetPassword stores password for non-interactive sudo operations.
 func (u *Uninstaller) SetPassword(password string) {
 	u.password = password
 }
@@ -265,11 +266,11 @@ func (u *Uninstaller) runCommand(ctx context.Context, name string, args ...strin
 
 	// If it's a sudo command and we have a password, use the password-enabled method
 	if name == "sudo" && u.password != "" {
-		return system.RunWithPassword(ctx, u.verbose, u.password, args...)
+		return u.executor.RunWithPassword(ctx, u.verbose, u.password, args...)
 	}
 
 	// For non-sudo commands or when no password is available, use regular execution
-	return system.Run(ctx, u.verbose, name, args...)
+	return u.executor.Run(ctx, u.verbose, name, args...)
 }
 
 // mapToDebPackageName maps app keys to their actual DEB package names for uninstallation.

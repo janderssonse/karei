@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides system status screen for the TUI interface.
+// Package models implements system status display UI.
 package models
 
 import (

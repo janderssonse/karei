@@ -22,18 +22,18 @@ var (
 	ErrUnknownGroup = errors.New("unknown group")
 )
 
-// Manager handles application installation and management.
+// Manager handles installation and management of applications.
 type Manager struct {
 	packageInstaller domain.PackageInstaller
 	versionManager   *versions.VersionManager
 }
 
-// NewManager creates a new application manager.
+// NewManager creates a new application manager with default version manager.
 func NewManager(verbose bool) *Manager {
 	return NewManagerWithVersionManager(verbose, versions.NewVersionManager(versions.GetVersionsConfigPath()))
 }
 
-// NewManagerWithVersionManager creates a new application manager with injected version manager.
+// NewManagerWithVersionManager creates a new application manager with a custom version manager.
 func NewManagerWithVersionManager(verbose bool, versionManager *versions.VersionManager) *Manager {
 	// Create platform adapters
 	commandRunner := platform.NewCommandRunner(verbose, false) // dryRun=false for real installation
@@ -54,7 +54,7 @@ func NewTUIManager(verbose bool) *Manager {
 	return NewTUIManagerWithVersionManager(verbose, versions.NewVersionManager(versions.GetVersionsConfigPath()))
 }
 
-// NewTUIManagerWithVersionManager creates a TUI-optimized application manager with injected version manager.
+// NewTUIManagerWithVersionManager creates a new TUI-optimized application manager with a custom version manager.
 func NewTUIManagerWithVersionManager(verbose bool, versionManager *versions.VersionManager) *Manager {
 	// Create TUI-optimized platform adapters that suppress output
 	commandRunner := platform.NewTUICommandRunner(verbose, false) // dryRun=false, tuiMode=true
@@ -96,7 +96,7 @@ func (m *Manager) InstallApp(ctx context.Context, name string) error {
 	return nil
 }
 
-// InstallGroup installs all applications in a group.
+// InstallGroup installs all applications in the specified group.
 func (m *Manager) InstallGroup(ctx context.Context, group string) error {
 	apps, exists := Groups[group]
 	if !exists {
@@ -112,7 +112,7 @@ func (m *Manager) InstallGroup(ctx context.Context, group string) error {
 	return nil
 }
 
-// InstallGroupFunctional installs all applications in a group using functional patterns.
+// InstallGroupFunctional installs all applications in the specified group with functional error handling.
 func (m *Manager) InstallGroupFunctional(ctx context.Context, group string) error {
 	apps, exists := Groups[group]
 	if !exists {
@@ -136,7 +136,7 @@ func (m *Manager) InstallGroupFunctional(ctx context.Context, group string) erro
 	return nil
 }
 
-// InstallMultipleApps installs multiple applications with better error handling.
+// InstallMultipleApps installs multiple applications and returns a map of errors.
 func (m *Manager) InstallMultipleApps(ctx context.Context, appNames []string) map[string]error {
 	results := make(map[string]error)
 
@@ -150,7 +150,7 @@ func (m *Manager) InstallMultipleApps(ctx context.Context, appNames []string) ma
 	return results
 }
 
-// InstallLanguage installs a programming language using mise.
+// InstallLanguage installs a programming language with the specified version.
 func (m *Manager) InstallLanguage(ctx context.Context, lang, version string) error {
 	// Install mise if not present
 	installed, err := m.packageInstaller.IsInstalled(ctx, "mise")
@@ -185,7 +185,7 @@ func (m *Manager) InstallLanguage(ctx context.Context, lang, version string) err
 	}
 }
 
-// ListApps returns applications in the given group, or all apps if group is empty.
+// ListApps returns a list of available applications, optionally filtered by group.
 func (m *Manager) ListApps(group string) []App {
 	var apps []App
 
@@ -211,7 +211,7 @@ func (m *Manager) ListApps(group string) []App {
 	return apps
 }
 
-// ListGroups returns all available application groups.
+// ListGroups returns a list of all available application groups.
 func (m *Manager) ListGroups() []string {
 	groups := make([]string, 0, len(Groups))
 	for name := range Groups {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package ubuntu provides Linux-specific implementations for the hexagonal architecture.
+// Package ubuntu implements Ubuntu/Debian package management adapters.
 package ubuntu
 
 import (
@@ -48,7 +48,7 @@ type PackageInstaller struct {
 	tuiMode       bool // When true, suppress progress messages for TUI compatibility
 }
 
-// NewPackageInstaller creates a new Linux package installer.
+// NewPackageInstaller creates a new Linux package installer with the provided dependencies.
 func NewPackageInstaller(commandRunner domain.CommandRunner, fileManager domain.FileManager, verbose, dryRun bool) *PackageInstaller {
 	return &PackageInstaller{
 		commandRunner: commandRunner,
@@ -70,7 +70,7 @@ func NewTUIPackageInstaller(commandRunner domain.CommandRunner, fileManager doma
 	}
 }
 
-// Install installs a package using the appropriate Linux method.
+// Install installs a package using the appropriate method.
 func (p *PackageInstaller) Install(ctx context.Context, pkg *domain.Package) (*domain.InstallationResult, error) {
 	startTime := time.Now()
 	result := &domain.InstallationResult{
@@ -91,7 +91,7 @@ func (p *PackageInstaller) Install(ctx context.Context, pkg *domain.Package) (*d
 	return result, err
 }
 
-// Remove removes a package from Linux systems.
+// Remove removes a package using the appropriate method.
 func (p *PackageInstaller) Remove(ctx context.Context, pkg *domain.Package) (*domain.InstallationResult, error) {
 	startTime := time.Now()
 	result := &domain.InstallationResult{
@@ -123,7 +123,7 @@ func (p *PackageInstaller) Remove(ctx context.Context, pkg *domain.Package) (*do
 	return result, err
 }
 
-// List returns all installed packages (APT packages for now).
+// List returns a list of installed packages.
 func (p *PackageInstaller) List(ctx context.Context) ([]*domain.Package, error) {
 	output, err := p.commandRunner.ExecuteWithOutput(ctx, "dpkg-query", "-W", "--showformat=${Package} ${Version}\\n")
 	if err != nil {
@@ -182,7 +182,7 @@ func (p *PackageInstaller) IsInstalled(ctx context.Context, name string) (bool, 
 	return false, nil
 }
 
-// GetBestMethod determines the best installation method for Linux.
+// GetBestMethod returns the best installation method for a given source.
 func (p *PackageInstaller) GetBestMethod(source string) domain.InstallMethod {
 	if strings.Contains(source, "github.com") {
 		return domain.MethodGitHub
@@ -203,7 +203,6 @@ func (p *PackageInstaller) GetBestMethod(source string) domain.InstallMethod {
 	return domain.MethodAPT
 }
 
-// executeInstallMethod dispatches to the appropriate installation method.
 func (p *PackageInstaller) executeInstallMethod(ctx context.Context, pkg *domain.Package) error {
 	// Use method dispatch map for reduced complexity
 	return p.dispatchInstallMethod(ctx, pkg)
@@ -661,7 +660,7 @@ func (p *PackageInstaller) removeFlatpak(ctx context.Context, pkg *domain.Packag
 	return p.commandRunner.Execute(ctx, "flatpak", args...)
 }
 
-// ensureFlathubRemote ensures the Flathub remote is added.
+// ensureFlathubRemote adds the Flathub remote if not present.
 func (p *PackageInstaller) ensureFlathubRemote(ctx context.Context) error {
 	if !p.tuiMode {
 		fmt.Printf("• Connecting to Flathub repository...\n")
@@ -898,7 +897,9 @@ func (p *PackageInstaller) runAquaInstall(ctx context.Context, aquaConfig, aquaP
 
 	// Use ExecuteWithEnv if available, otherwise use Execute
 	// For now, we'll set the environment variable before execution
-	_ = os.Setenv("AQUA_ROOT_DIR", userLocal)
+	if err := os.Setenv("AQUA_ROOT_DIR", userLocal); err != nil {
+		return fmt.Errorf("failed to set AQUA_ROOT_DIR: %w", err)
+	}
 
 	defer func() { _ = os.Unsetenv("AQUA_ROOT_DIR") }()
 
@@ -1419,7 +1420,9 @@ func (p *PackageInstaller) createPMDSymlink(pmdDir string) error {
 
 	// Remove existing symlink if it exists
 	if p.fileManager.FileExists(symlinkTarget) {
-		_ = os.Remove(symlinkTarget)
+		if err := os.Remove(symlinkTarget); err != nil {
+			return fmt.Errorf("failed to remove existing PMD symlink: %w", err)
+		}
 	}
 
 	if err := os.Symlink(symlinkSource, symlinkTarget); err != nil {

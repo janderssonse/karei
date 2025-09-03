@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides error handling and recovery for the TUI interface.
+// Package models implements error display and recovery UI.
 package models
 
 import (
@@ -37,7 +37,7 @@ const (
 	ErrorInstallation
 )
 
-// ErrorDetails contains comprehensive error information.
+// ErrorDetails contains error information.
 type ErrorDetails struct {
 	Type        ErrorType
 	Title       string

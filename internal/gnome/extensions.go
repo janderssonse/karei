@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package gnome provides GNOME desktop environment integration.
 package gnome
 
 import (
@@ -125,17 +124,17 @@ var Extensions = map[string]Extension{ //nolint:gochecknoglobals
 	},
 }
 
-// ExtensionManager handles GNOME extension operations.
+// ExtensionManager manages GNOME shell extensions.
 type ExtensionManager struct {
 	verbose bool
 }
 
-// NewExtensionManager creates a new extension manager.
+// NewExtensionManager creates a new extension manager instance.
 func NewExtensionManager(verbose bool) *ExtensionManager {
 	return &ExtensionManager{verbose: verbose}
 }
 
-// InstallExtensionManager installs extension management tools.
+// InstallExtensionManager installs the GNOME extension management tools.
 func (m *ExtensionManager) InstallExtensionManager(ctx context.Context) error {
 	if m.verbose {
 		fmt.Println("Installing GNOME extension management tools...")
@@ -165,7 +164,7 @@ func (m *ExtensionManager) InstallExtensionManager(ctx context.Context) error {
 	return nil
 }
 
-// InstallExtension installs a specific GNOME extension.
+// InstallExtension installs a specific GNOME shell extension.
 func (m *ExtensionManager) InstallExtension(ctx context.Context, extensionName string) error {
 	ext, exists := Extensions[extensionName]
 	if !exists {
@@ -199,7 +198,7 @@ func (m *ExtensionManager) InstallExtension(ctx context.Context, extensionName s
 	return nil
 }
 
-// InstallAllExtensions installs all configured GNOME extensions.
+// InstallAllExtensions installs all configured GNOME shell extensions.
 func (m *ExtensionManager) InstallAllExtensions(ctx context.Context) error {
 	// First install extension manager
 	if err := m.InstallExtensionManager(ctx); err != nil {
@@ -239,7 +238,7 @@ func (m *ExtensionManager) InstallAllExtensions(ctx context.Context) error {
 	return nil
 }
 
-// DisableDefaultExtensions disables default Ubuntu GNOME extensions.
+// DisableDefaultExtensions disables all default GNOME shell extensions.
 func (m *ExtensionManager) DisableDefaultExtensions(ctx context.Context) error {
 	if m.verbose {
 		fmt.Println("Disabling default Ubuntu extensions...")
@@ -258,7 +257,7 @@ func (m *ExtensionManager) DisableDefaultExtensions(ctx context.Context) error {
 	return nil
 }
 
-// CompileSchemas compiles GNOME schemas.
+// CompileSchemas compiles the GNOME extension schemas.
 func (m *ExtensionManager) CompileSchemas(ctx context.Context) error {
 	if m.verbose {
 		fmt.Println("Compiling GNOME schemas...")
@@ -267,7 +266,7 @@ func (m *ExtensionManager) CompileSchemas(ctx context.Context) error {
 	return exec.CommandContext(ctx, "sudo", "glib-compile-schemas", "/usr/share/glib-2.0/schemas/").Run()
 }
 
-// ConfigureExtensions configures installed GNOME extensions.
+// ConfigureExtensions configures all installed GNOME shell extensions.
 func (m *ExtensionManager) ConfigureExtensions(ctx context.Context) error {
 	if m.verbose {
 		fmt.Println("Configuring GNOME extension settings...")
@@ -284,7 +283,7 @@ func (m *ExtensionManager) ConfigureExtensions(ctx context.Context) error {
 	return nil
 }
 
-// EnableExtension enables a GNOME extension.
+// EnableExtension activates the specified GNOME shell extension.
 func (m *ExtensionManager) EnableExtension(ctx context.Context, extensionName string) error {
 	ext, exists := Extensions[extensionName]
 	if !exists {
@@ -294,7 +293,7 @@ func (m *ExtensionManager) EnableExtension(ctx context.Context, extensionName st
 	return exec.CommandContext(ctx, "gnome-extensions", "enable", ext.ID).Run() //nolint:gosec
 }
 
-// DisableExtension disables a GNOME extension.
+// DisableExtension disables a specific GNOME shell extension.
 func (m *ExtensionManager) DisableExtension(ctx context.Context, extensionName string) error {
 	ext, exists := Extensions[extensionName]
 	if !exists {
@@ -304,7 +303,7 @@ func (m *ExtensionManager) DisableExtension(ctx context.Context, extensionName s
 	return exec.CommandContext(ctx, "gnome-extensions", "disable", ext.ID).Run() //nolint:gosec
 }
 
-// ListInstalledExtensions lists all installed GNOME extensions.
+// ListInstalledExtensions returns a list of all installed GNOME shell extensions.
 func (m *ExtensionManager) ListInstalledExtensions(ctx context.Context) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "gnome-extensions", "list")
 
@@ -318,7 +317,7 @@ func (m *ExtensionManager) ListInstalledExtensions(ctx context.Context) ([]strin
 	return []string{string(output)}, nil
 }
 
-// GetExtensionStatus gets the status of a GNOME extension.
+// GetExtensionStatus returns the status of a specific GNOME shell extension.
 func (m *ExtensionManager) GetExtensionStatus(ctx context.Context, extensionName string) (bool, error) {
 	ext, exists := Extensions[extensionName]
 	if !exists {
@@ -330,8 +329,6 @@ func (m *ExtensionManager) GetExtensionStatus(ctx context.Context, extensionName
 
 	return err == nil, nil
 }
-
-// Helper methods
 
 func (m *ExtensionManager) copyExtensionSchema(ctx context.Context, ext Extension) error {
 	home, err := os.UserHomeDir()

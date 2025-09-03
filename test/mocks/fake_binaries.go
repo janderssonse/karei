@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package mocks provides mock implementations for testing Karei components.
+// Package mocks contains test doubles and fake implementations.
 package mocks
 
 import (

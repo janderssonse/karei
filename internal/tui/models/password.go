@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides password input functionality for the TUI interface.
+// Package models implements secure password input UI.
 package models
 
 import (

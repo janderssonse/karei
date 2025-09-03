@@ -6,3 +6,6 @@ bin
 # Debug and log files
 karei_debug.log
 *.log
+
+# Coverage files
+*.out

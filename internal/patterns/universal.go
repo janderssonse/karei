@@ -98,28 +98,28 @@ type UniversalConfig struct {
 // ManagerOption represents a functional option for configuring UniversalManager.
 type ManagerOption func(*UniversalManager)
 
-// WithVerbose sets verbose mode.
+// WithVerbose sets the verbose flag for the UniversalManager.
 func WithVerbose(verbose bool) ManagerOption {
 	return func(m *UniversalManager) {
 		m.verbose = verbose
 	}
 }
 
-// WithDryRun sets dry run mode.
+// WithDryRun sets the dry-run flag for the UniversalManager.
 func WithDryRun(dryRun bool) ManagerOption {
 	return func(m *UniversalManager) {
 		m.dryRun = dryRun
 	}
 }
 
-// WithHandlers sets custom handlers.
+// WithHandlers sets the handlers map for the UniversalManager.
 func WithHandlers(handlers map[string]func(context.Context, string) error) ManagerOption {
 	return func(m *UniversalManager) {
 		m.handlers = handlers
 	}
 }
 
-// WithAvailable sets available options.
+// WithAvailable sets the available options for the UniversalManager.
 func WithAvailable(available []string) ManagerOption {
 	return func(m *UniversalManager) {
 		m.Available = available
@@ -141,7 +141,7 @@ func NewUniversalManager(cfg UniversalConfig) *UniversalManager {
 	}
 }
 
-// NewUniversalManagerWithOptions creates a manager with functional options.
+// NewUniversalManagerWithOptions creates a new UniversalManager with functional options.
 func NewUniversalManagerWithOptions(name string, managerType ManagerType, opts ...ManagerOption) *UniversalManager {
 	manager := &UniversalManager{
 		Name:       name,
@@ -162,7 +162,7 @@ func NewUniversalManagerWithOptions(name string, managerType ManagerType, opts .
 // Apply applies configuration using the appropriate handler
 // Consolidates Apply/Install/Configure/Execute methods from all managers.
 //
-//nolint:cyclop // This function orchestrates different manager types
+//nolint:cyclop // Complex branching for different manager types
 func (um *UniversalManager) Apply(ctx context.Context, target string) error {
 	if !um.IsValid(target) {
 		// Return specific exit code based on manager type
@@ -220,12 +220,12 @@ func (um *UniversalManager) Apply(ctx context.Context, target string) error {
 	return err
 }
 
-// IsValid validates input against available options.
+// IsValid checks if a choice is valid for the manager.
 func (um *UniversalManager) IsValid(choice string) bool {
 	return slices.Contains(um.Available, choice)
 }
 
-// GetCurrent returns current selection with auto-detection.
+// GetCurrent detects and caches the current selection if not already set.
 func (um *UniversalManager) GetCurrent() string {
 	if um.Current == "" {
 		um.Current = um.detectCurrent()
@@ -234,12 +234,12 @@ func (um *UniversalManager) GetCurrent() string {
 	return um.Current
 }
 
-// GetAvailable returns available options.
+// GetAvailable lists all configured options.
 func (um *UniversalManager) GetAvailable() []string {
 	return um.Available
 }
 
-// SaveCurrent saves current selection to config.
+// SaveCurrent saves the current selection to the configuration file.
 func (um *UniversalManager) SaveCurrent(choice string) error {
 	if err := um.SetCurrent(choice); err != nil {
 		return err
@@ -250,7 +250,7 @@ func (um *UniversalManager) SaveCurrent(choice string) error {
 	return system.SafeWriteFile(um.ConfigPath, []byte(content))
 }
 
-// SetCurrent sets current selection with validation.
+// SetCurrent validates and updates the current selection.
 func (um *UniversalManager) SetCurrent(choice string) error {
 	if !um.IsValid(choice) {
 		return fmt.Errorf("%w for %s: %s", ErrInvalidInput, um.Type, choice)
@@ -261,7 +261,7 @@ func (um *UniversalManager) SetCurrent(choice string) error {
 	return nil
 }
 
-// Status returns current status information.
+// Status returns the current status of the manager.
 func (um *UniversalManager) Status() map[string]any {
 	return map[string]any{
 		"type":      um.Type,
@@ -273,7 +273,6 @@ func (um *UniversalManager) Status() map[string]any {
 
 // Private methods (unexported - placed after public methods per funcorder)
 
-// detectCurrent attempts to detect current configuration.
 func (um *UniversalManager) detectCurrent() string {
 	if !system.FileExists(um.ConfigPath) {
 		return um.getDefault()
@@ -303,7 +302,6 @@ func (um *UniversalManager) detectCurrent() string {
 	return um.getDefault()
 }
 
-// getDefault returns default option.
 func (um *UniversalManager) getDefault() string {
 	if len(um.Available) > 0 {
 		return um.Available[0]
@@ -334,7 +332,7 @@ type CommandConfig struct {
 	Handlers    map[string]func(context.Context, string) error
 }
 
-// NewUniversalCommand creates any CLI command using unified pattern.
+// NewUniversalCommand creates a new universal command with the given configuration.
 func NewUniversalCommand(config CommandConfig) *UniversalCommand {
 	manager := NewUniversalManager(UniversalConfig{
 		Name:      config.Name,
@@ -381,7 +379,6 @@ func (uc *UniversalCommand) Execute(ctx context.Context, args []string) error {
 	return nil
 }
 
-// showAvailable displays available options.
 func (uc *UniversalCommand) showAvailable() {
 	current := uc.Manager.GetCurrent()
 
@@ -416,7 +413,6 @@ func (uc *UniversalCommand) showAvailable() {
 	}
 }
 
-// showStatus displays current status.
 func (uc *UniversalCommand) showStatus() {
 	status := uc.Manager.Status()
 
@@ -433,7 +429,6 @@ func (uc *UniversalCommand) showStatus() {
 	}
 }
 
-// showConciseHelp displays brief usage before interactive mode.
 func (uc *UniversalCommand) showConciseHelp() {
 	fmt.Fprintf(os.Stderr, "%s - %s\n\n", uc.Name, uc.Usage)
 	fmt.Fprintf(os.Stderr, "Usage: karei %s [option]\n\n", uc.Name)
@@ -449,7 +444,6 @@ func (uc *UniversalCommand) showConciseHelp() {
 	fmt.Fprintf(os.Stderr, "\nFor more options, use: karei %s --help\n\n", uc.Name)
 }
 
-// runInteractive runs interactive selection with timeout handling.
 func (uc *UniversalCommand) runInteractive(ctx context.Context) error {
 	// Skip interactive mode in JSON mode
 	if console.DefaultOutput.JSON {
@@ -502,7 +496,7 @@ type CommandExecutor struct {
 	dryRun  bool
 }
 
-// NewCommandExecutor creates unified command executor.
+// NewCommandExecutor creates a new command executor.
 func NewCommandExecutor(verbose, dryRun bool) *CommandExecutor {
 	return &CommandExecutor{
 		verbose: verbose,
@@ -522,14 +516,14 @@ func (ce *CommandExecutor) Execute(ctx context.Context, name string, args ...str
 	return system.Run(ctx, ce.verbose, name, args...)
 }
 
-// ExecuteSudo runs command with sudo using unified patterns.
+// ExecuteSudo runs a command with sudo privileges.
 func (ce *CommandExecutor) ExecuteSudo(ctx context.Context, name string, args ...string) error {
 	sudoArgs := append([]string{name}, args...)
 
 	return ce.Execute(ctx, "sudo", sudoArgs...)
 }
 
-// ExecuteWithOutput runs command and captures output.
+// ExecuteWithOutput runs a command and returns its output.
 func (ce *CommandExecutor) ExecuteWithOutput(ctx context.Context, name string, args ...string) (string, error) {
 	if ce.dryRun {
 		fmt.Printf("DRY RUN: %s %s\n", name, strings.Join(args, " "))
@@ -540,7 +534,7 @@ func (ce *CommandExecutor) ExecuteWithOutput(ctx context.Context, name string, a
 	return system.RunWithOutput(ctx, name, args...)
 }
 
-// ExecuteSilent runs command silently.
+// ExecuteSilent runs a command silently without output.
 func (ce *CommandExecutor) ExecuteSilent(ctx context.Context, name string, args ...string) error {
 	if ce.dryRun {
 		return nil
@@ -549,7 +543,7 @@ func (ce *CommandExecutor) ExecuteSilent(ctx context.Context, name string, args 
 	return system.RunSilent(ctx, name, args...)
 }
 
-// CommandExists checks if command is available.
+// CommandExists checks if a command is available in the system.
 func (ce *CommandExecutor) CommandExists(name string) bool {
 	return system.CommandExists(name)
 }
@@ -560,36 +554,36 @@ type ServiceController struct {
 	executor *CommandExecutor
 }
 
-// NewServiceController creates service controller.
+// NewServiceController creates a new service controller for systemctl operations.
 func NewServiceController(verbose, dryRun bool) *ServiceController {
 	return &ServiceController{
 		executor: NewCommandExecutor(verbose, dryRun),
 	}
 }
 
-// IsActive checks if service is active.
+// IsActive checks if a systemd service is active.
 func (sc *ServiceController) IsActive(ctx context.Context, serviceName string) bool {
 	err := sc.executor.ExecuteSilent(ctx, "systemctl", "is-active", "--quiet", serviceName)
 
 	return err == nil
 }
 
-// Enable enables a service.
+// Enable marks a systemd service to start at boot.
 func (sc *ServiceController) Enable(ctx context.Context, serviceName string) error {
 	return sc.executor.ExecuteSudo(ctx, "systemctl", "enable", serviceName)
 }
 
-// Start starts a service.
+// Start starts a systemd service.
 func (sc *ServiceController) Start(ctx context.Context, serviceName string) error {
 	return sc.executor.ExecuteSudo(ctx, "systemctl", "start", serviceName)
 }
 
-// Status gets service status.
+// Status gets the status of a systemd service.
 func (sc *ServiceController) Status(ctx context.Context, serviceName string) (string, error) {
 	return sc.executor.ExecuteWithOutput(ctx, "systemctl", "status", serviceName)
 }
 
-// GetProperty gets service property.
+// GetProperty gets a specific property of a systemd service.
 func (sc *ServiceController) GetProperty(ctx context.Context, serviceName, property string) (string, error) {
 	return sc.executor.ExecuteWithOutput(ctx, "systemctl", "show", serviceName, "--property="+property, "--value")
 }

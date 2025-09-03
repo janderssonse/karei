@@ -60,7 +60,7 @@ linters:
     # - dupword
     - durationcheck
     - errcheck
-    - err113
+    # - err113  # Too strict for test files
     - errchkjson
     - errname
     - errorlint

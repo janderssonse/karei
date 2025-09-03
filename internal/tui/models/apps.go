@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides Bubble Tea models for the TUI interface.
+// Package models implements application selection and installation UI.
 //
 //nolint:funcorder // This file groups methods by functionality rather than export/unexport order for better readability
 package models
@@ -735,11 +735,6 @@ func (m *AppsModel) markForUninstall() {
 	m.selected[app.Key] = StateUninstall
 }
 
-// Legacy method for backward compatibility - now uses toggle behavior.
-func (m *AppsModel) toggleSelection() {
-	m.toggleInstallSelection()
-}
-
 // toggleInstallSelectionForSearchResult toggles selection for the currently selected search result.
 func (m *AppsModel) toggleInstallSelectionForSearchResult() {
 	if !m.searchActive || m.searchSelection < 0 || m.searchSelection >= len(m.filteredApps) {
@@ -872,7 +867,6 @@ func (m *AppsModel) handleCharacterInput(msg tea.KeyMsg) tea.Cmd {
 
 // updateSearchResults updates the filtered results based on current search query.
 func (m *AppsModel) updateSearchResults() {
-	// Use the sophisticated search function instead of simple fuzzy matching
 	m.filteredApps = m.performFuzzySearch(m.searchQuery)
 
 	// Reset selection
@@ -1304,18 +1298,6 @@ func (m *AppsModel) getSelectedOperations() []SelectedOperation {
 	return operations
 }
 
-// getSelectedApps returns the list of selected applications (legacy compatibility).
-func (m *AppsModel) getSelectedApps() []string {
-	selected := make([]string, 0, len(m.selected))
-	for appKey, state := range m.selected {
-		if state == StateInstall {
-			selected = append(selected, appKey)
-		}
-	}
-
-	return selected
-}
-
 // newAppCatalogAdapter creates adapter for the apps catalog.
 func newAppCatalogAdapter() *appCatalogAdapter {
 	return &appCatalogAdapter{
@@ -1551,11 +1533,6 @@ func (m *AppsModel) renderCategoryWithBorder(content string, isCurrent bool) str
 // GetSearchHasFocus returns whether the search field currently has focus.
 func (m *AppsModel) GetSearchHasFocus() bool {
 	return m.searchHasFocus
-}
-
-// getFilteredApps returns the current filtered apps list (for testing).
-func (m *AppsModel) getFilteredApps() []app {
-	return m.filteredApps
 }
 
 // IsSearchActive returns whether search is currently active.

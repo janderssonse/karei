@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package models provides Bubble Tea models for the TUI interface.
+// Package models implements the main menu navigation interface.
 package models
 
 import (

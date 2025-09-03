@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package network provides network-related utilities including proxy configuration for Karei.
 package network
 
 import (
@@ -23,7 +22,7 @@ func GetHTTPClient() *http.Client {
 }
 
 // GetProxyEnv returns proxy-related environment variables for passing to subprocesses.
-// This ensures child processes (apt, curl, wget) inherit proxy settings.
+// Ensures child processes (apt, curl, wget) inherit proxy settings.
 // Returns both uppercase and lowercase versions for maximum compatibility.
 //
 // Handles essential proxy variables:

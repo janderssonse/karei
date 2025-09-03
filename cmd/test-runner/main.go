@@ -78,7 +78,7 @@ const (
 	StatusPassed = "passed"
 )
 
-// TestResult tracks individual test results with proper error categorization.
+// TestResult tracks individual test results categorized by error type.
 type TestResult struct {
 	Name     string        `json:"name"`
 	Status   string        `json:"status"`
@@ -88,7 +88,7 @@ type TestResult struct {
 	ExitCode int           `json:"exit_code,omitempty"`
 }
 
-// OfflineTestSuite runs comprehensive offline tests with proper output handling.
+// OfflineTestSuite runs offline tests with structured output handling.
 type OfflineTestSuite struct {
 	verbose     bool
 	jsonOutput  bool
@@ -107,7 +107,7 @@ type TestSuiteConfig struct {
 	FixtureDir string
 }
 
-// NewOfflineTestSuite creates a new offline test suite with proper logging.
+// NewOfflineTestSuite initializes a test suite with structured logging to stderr.
 func NewOfflineTestSuite(config TestSuiteConfig) *OfflineTestSuite {
 	// Create logger that writes to stderr
 	logger := log.New(os.Stderr, "", log.LstdFlags)
@@ -123,7 +123,7 @@ func NewOfflineTestSuite(config TestSuiteConfig) *OfflineTestSuite {
 	}
 }
 
-// RunAllTests executes the complete offline test suite with proper exit codes.
+// RunAllTests executes the complete offline test suite and returns appropriate exit codes.
 func (ots *OfflineTestSuite) RunAllTests() int {
 	ots.logProgressf("🧪 Starting Karei Offline Test Suite")
 	ots.logProgressf("===================================")
@@ -525,7 +525,7 @@ func (ots *OfflineTestSuite) cleanup() error {
 	return nil
 }
 
-// outputFinalResults prints test results to appropriate streams.
+// outputFinalResults prints test results to stdout (JSON) or stderr (text).
 func (ots *OfflineTestSuite) outputFinalResults(exitCode int) {
 	totalTests := len(ots.results)
 	passedTests := 0
@@ -710,7 +710,7 @@ func (ots *OfflineTestSuite) outputHumanSummary(exitCode int, totalDuration time
 	}
 }
 
-// main function with proper exit code handling.
+// main executes the test suite and exits with the appropriate code.
 func main() {
 	config, parseExitCode := parseArgs()
 	if parseExitCode >= 0 {

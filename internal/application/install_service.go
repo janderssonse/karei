@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package application provides application services that orchestrate domain operations.
 package application
 
 import (
@@ -11,13 +10,13 @@ import (
 	"github.com/janderssonse/karei/internal/domain"
 )
 
-// InstallService provides high-level installation operations.
+// InstallService installs packages with automatic system detection.
 type InstallService struct {
 	packageService *domain.PackageService
 	systemDetector domain.SystemDetector
 }
 
-// NewInstallService creates a new install service.
+// NewInstallService creates an InstallService.
 func NewInstallService(packageService *domain.PackageService, systemDetector domain.SystemDetector) *InstallService {
 	return &InstallService{
 		packageService: packageService,
@@ -65,7 +64,7 @@ func (s *InstallService) InstallMultipleApplications(ctx context.Context, apps m
 	return results, nil
 }
 
-// GetSystemInfo returns detailed system information.
+// GetSystemInfo detects the current system's distribution and package manager.
 func (s *InstallService) GetSystemInfo(ctx context.Context) (*domain.SystemInfo, error) {
 	return s.systemDetector.DetectSystem(ctx)
 }
@@ -78,7 +77,7 @@ func (s *InstallService) ListInstalledPackages(ctx context.Context) ([]*domain.P
 // getBestMethodForSystem determines the best installation method based on source and system.
 func (s *InstallService) getBestMethodForSystem(_ string, systemInfo *domain.SystemInfo) domain.InstallMethod {
 	// For Ubuntu/Debian systems
-	if systemInfo.IsLinux() {
+	if systemInfo.IsDebianBased() {
 		if systemInfo.PackageManager.Method == domain.MethodAPT {
 			return domain.MethodAPT
 		}

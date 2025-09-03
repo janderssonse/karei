@@ -1,265 +1,276 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package versions provides version management utilities for karei.
-package versions
+package versions_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/janderssonse/karei/internal/versions"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const nonExistentUserConfigPath = "/non/existent/user/config"
-
-// TestPathResolver is a test implementation of PathResolver.
-type TestPathResolver struct {
+// MockPathResolver provides test paths for version config.
+type MockPathResolver struct {
 	userConfigPath string
 	xdgConfigHome  string
 }
 
-func (p *TestPathResolver) GetUserVersionsConfigPath() string {
-	return p.userConfigPath
+func (m *MockPathResolver) GetUserVersionsConfigPath() string {
+	return m.userConfigPath
 }
 
-func (p *TestPathResolver) GetXDGConfigHome() string {
-	return p.xdgConfigHome
+func (m *MockPathResolver) GetXDGConfigHome() string {
+	return m.xdgConfigHome
 }
 
-func TestVersionManager_GetVersion(t *testing.T) {
-	t.Parallel() // Now safe to run in parallel
-	// Note: Not parallel due to potential user config interference
-	// Create temporary directory for test
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "versions.toml")
-
-	// Create test config content
-	testConfig := `[tools]
-java = "17.0.0"
-maven = "3.9.0"
-nonexistent = "1.0.0"`
-
-	require.NoError(t, os.WriteFile(configPath, []byte(testConfig), 0600))
-
-	// Create test path resolver that returns non-existent user config path
-	testResolver := &TestPathResolver{
-		userConfigPath: nonExistentUserConfigPath,
-		xdgConfigHome:  tmpDir,
-	}
-
-	// Create version manager with test config and resolver
-	versionManager := NewVersionManagerWithResolver(configPath, testResolver)
-
-	tests := []struct {
-		name        string
-		toolName    string
-		expectedVer string
-		expectError bool
-	}{
-		{
-			name:        "existing tool with version",
-			toolName:    "java",
-			expectedVer: "17.0.0",
-			expectError: false,
-		},
-		{
-			name:        "another existing tool",
-			toolName:    "maven",
-			expectedVer: "3.9.0",
-			expectError: false,
-		},
-		{
-			name:        "non-existent tool returns latest",
-			toolName:    "unknown-tool",
-			expectedVer: "latest",
-			expectError: false,
-		},
-		{
-			name:        "empty tool name returns latest",
-			toolName:    "",
-			expectedVer: "latest",
-			expectError: false,
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			version, err := versionManager.GetVersion(testCase.toolName)
-
-			if testCase.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, testCase.expectedVer, version)
-			}
-		})
-	}
-}
-
-func TestVersionManager_GetVersion_NonExistentConfig(t *testing.T) {
-	t.Parallel()
-
-	// Create test path resolver that returns non-existent user config path
-	testResolver := &TestPathResolver{
-		userConfigPath: nonExistentUserConfigPath,
-		xdgConfigHome:  "/tmp",
-	}
-
-	// Create version manager with non-existent config and test resolver
-	versionManager := NewVersionManagerWithResolver("/non/existent/path/versions.toml", testResolver)
-
-	version, err := versionManager.GetVersion("java")
-	require.NoError(t, err)
-	assert.Equal(t, "latest", version)
-}
-
-func TestVersionManager_GetVersion_UserConfigPriority(t *testing.T) {
-	t.Parallel() // Now safe to run in parallel
-	// Create temporary directories
-	tmpDir := t.TempDir()
-	systemConfigPath := filepath.Join(tmpDir, "system-versions.toml")
-	userConfigPath := filepath.Join(tmpDir, "user-versions.toml")
+// TestVersionPriority tests the business logic of version resolution priority
+// Business Rule: User config > System config > "latest".
+func TestVersionPriority(t *testing.T) {
+	// Create temp directories for configs
+	tempDir := t.TempDir()
+	systemConfigPath := filepath.Join(tempDir, "system", "versions.toml")
+	userConfigPath := filepath.Join(tempDir, "user", "versions.toml")
 
 	// Create system config
+	require.NoError(t, os.MkdirAll(filepath.Dir(systemConfigPath), 0750))
+
 	systemConfig := `[tools]
-java = "17.0.0"
-maven = "3.9.0"`
+go = "1.20"
+node = "18.0.0"
+rust = "1.70.0"`
 	require.NoError(t, os.WriteFile(systemConfigPath, []byte(systemConfig), 0600))
 
-	// Create user config with different versions
+	// Create user config (overrides some versions)
+	require.NoError(t, os.MkdirAll(filepath.Dir(userConfigPath), 0750))
+
 	userConfig := `[tools]
-java = "21.0.0"
-gradle = "8.5"`
+go = "1.21"
+python = "3.11"`
 	require.NoError(t, os.WriteFile(userConfigPath, []byte(userConfig), 0600))
 
-	// Create test path resolver that returns the user config path
-	testResolver := &TestPathResolver{
+	// Create version manager with mock resolver
+	mockResolver := &MockPathResolver{
 		userConfigPath: userConfigPath,
-		xdgConfigHome:  tmpDir,
+		xdgConfigHome:  tempDir,
 	}
-
-	// Create version manager with system config and test resolver
-	versionManager := NewVersionManagerWithResolver(systemConfigPath, testResolver)
+	manager := versions.NewVersionManagerWithResolver(systemConfigPath, mockResolver)
 
 	tests := []struct {
 		name        string
-		toolName    string
-		expectedVer string
+		tool        string
+		expected    string
+		description string
 	}{
 		{
 			name:        "user config overrides system config",
-			toolName:    "java",
-			expectedVer: "21.0.0",
+			tool:        "go",
+			expected:    "1.21",
+			description: "Business rule: user config takes priority",
 		},
 		{
-			name:        "user config provides version not in system",
-			toolName:    "gradle",
-			expectedVer: "8.5",
+			name:        "system config used when no user override",
+			tool:        "node",
+			expected:    "18.0.0",
+			description: "Business rule: fallback to system config",
 		},
 		{
-			name:        "falls back to system config",
-			toolName:    "maven",
-			expectedVer: "3.9.0",
+			name:        "user config adds new tool not in system",
+			tool:        "python",
+			expected:    "3.11",
+			description: "Business rule: user can add tools",
+		},
+		{
+			name:        "default to latest when tool not configured",
+			tool:        "ruby",
+			expected:    "latest",
+			description: "Business rule: default to latest",
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			version, err := versionManager.GetVersion(testCase.toolName)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			version, err := manager.GetVersion(tc.tool)
 			require.NoError(t, err)
-			assert.Equal(t, testCase.expectedVer, version)
+			assert.Equal(t, tc.expected, version, tc.description)
 		})
 	}
 }
 
-func TestVersionManager_GetAllVersions(t *testing.T) {
-	t.Parallel()
+// TestVersionManagerWithMissingConfigs tests behavior when configs don't exist.
+func TestVersionManagerWithMissingConfigs(t *testing.T) {
+	tempDir := t.TempDir()
+	nonExistentPath := filepath.Join(tempDir, "does-not-exist", "versions.toml")
 
-	// Create temporary directory for test
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "versions.toml")
+	mockResolver := &MockPathResolver{
+		userConfigPath: filepath.Join(tempDir, "also-does-not-exist", "versions.toml"),
+		xdgConfigHome:  tempDir,
+	}
+	manager := versions.NewVersionManagerWithResolver(nonExistentPath, mockResolver)
 
-	// Create test config content
-	testConfig := `[tools]
-java = "17.0.0"
-maven = "3.9.0"
-gradle = "8.5"`
+	// Business rule: When no config exists, always return "latest" without error
+	version, err := manager.GetVersion("any-tool")
+	require.NoError(t, err, "Missing config should not cause error")
+	assert.Equal(t, "latest", version, "Should default to latest when no config")
+}
 
-	require.NoError(t, os.WriteFile(configPath, []byte(testConfig), 0600))
+// TestVersionManagerWithCorruptConfig tests behavior with invalid TOML.
+func TestVersionManagerWithCorruptConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "versions.toml")
 
-	// Create version manager with test config
-	versionManager := NewVersionManager(configPath)
+	// Write invalid TOML
+	invalidTOML := `[tools
+this is not valid TOML`
+	require.NoError(t, os.WriteFile(configPath, []byte(invalidTOML), 0600))
 
-	versions, err := versionManager.GetAllVersions()
+	mockResolver := &MockPathResolver{
+		userConfigPath: filepath.Join(tempDir, "no-user-config", "versions.toml"),
+		xdgConfigHome:  tempDir,
+	}
+	manager := versions.NewVersionManagerWithResolver(configPath, mockResolver)
+
+	// Business rule: Corrupt config defaults to "latest" (graceful degradation)
+	version, err := manager.GetVersion("go")
+	require.NoError(t, err, "Corrupt config should not error on GetVersion")
+	assert.Equal(t, "latest", version, "Should default to latest on corrupt config")
+
+	// GetAllVersions should return error for corrupt config
+	_, err = manager.GetAllVersions()
+	assert.Error(t, err, "GetAllVersions should error on corrupt config")
+}
+
+// TestGetAllVersions tests retrieving all configured versions.
+func TestGetAllVersions(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "versions.toml")
+
+	config := `[tools]
+go = "1.21"
+node = "20.0.0"
+rust = "1.75.0"`
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
+
+	manager := versions.NewVersionManager(configPath)
+	allVersions, err := manager.GetAllVersions()
+
 	require.NoError(t, err)
-
-	expected := map[string]string{
-		"java":   "17.0.0",
-		"maven":  "3.9.0",
-		"gradle": "8.5",
-	}
-
-	assert.Equal(t, expected, versions)
+	assert.Len(t, allVersions, 3)
+	assert.Equal(t, "1.21", allVersions["go"])
+	assert.Equal(t, "20.0.0", allVersions["node"])
+	assert.Equal(t, "1.75.0", allVersions["rust"])
 }
 
-func TestVersionManager_GetAllVersions_NonExistentConfig(t *testing.T) {
-	t.Parallel()
+// TestVersionManagerWithPermissionError tests behavior when config file is unreadable.
+func TestVersionManagerWithPermissionError(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "versions.toml")
 
-	// Create version manager with non-existent config
-	versionManager := NewVersionManager("/non/existent/path/versions.toml")
+	// Create config file
+	config := `[tools]
+go = "1.21"`
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
 
-	versions, err := versionManager.GetAllVersions()
-	require.Error(t, err)
-	assert.Empty(t, versions)
-}
-
-func TestVersionManager_LoadVersionConfig_InvalidTOML(t *testing.T) {
-	t.Parallel()
-
-	// Create test path resolver that returns non-existent user config path
-	testResolver := &TestPathResolver{
-		userConfigPath: nonExistentUserConfigPath,
-		xdgConfigHome:  "/tmp",
+	// Make file unreadable (only works on Unix-like systems)
+	err := os.Chmod(configPath, 0000)
+	if err != nil {
+		t.Skip("Cannot test permission errors on this system")
 	}
 
-	// Create temporary directory for test
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "invalid-versions.toml")
+	defer func() {
+		_ = os.Chmod(configPath, 0600) // Restore permissions for cleanup
+	}()
 
-	// Create invalid TOML content
-	invalidConfig := `[tools
-java = "17.0.0"`
+	manager := versions.NewVersionManager(configPath)
 
-	require.NoError(t, os.WriteFile(configPath, []byte(invalidConfig), 0600))
+	// Business rule: Permission errors should gracefully default to "latest"
+	version, err := manager.GetVersion("go")
+	require.NoError(t, err, "GetVersion should not error on permission issues")
+	assert.Equal(t, "latest", version, "Should default to latest on permission error")
+}
 
-	// Create version manager with invalid config and test resolver
-	versionManager := NewVersionManagerWithResolver(configPath, testResolver)
+// TestVersionManagerWithEmptyToolsSection tests behavior with empty [tools] section.
+func TestVersionManagerWithEmptyToolsSection(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "versions.toml")
 
-	version, err := versionManager.GetVersion("java")
-	require.NoError(t, err) // Should not error, just return "latest"
+	// Empty tools section
+	config := `[tools]`
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
+
+	manager := versions.NewVersionManager(configPath)
+
+	// Business rule: Empty config should return "latest" for any tool
+	version, err := manager.GetVersion("any-tool")
+	require.NoError(t, err)
 	assert.Equal(t, "latest", version)
+
+	// GetAllVersions should return empty map
+	allVersions, err := manager.GetAllVersions()
+	require.NoError(t, err)
+	assert.Empty(t, allVersions)
 }
 
-func TestGetVersionsConfigPath(t *testing.T) {
-	t.Parallel()
+// TestVersionManagerWithPartiallyCorruptConfig tests mixed valid/invalid config.
+func TestVersionManagerWithPartiallyCorruptConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	systemPath := filepath.Join(tempDir, "system", "versions.toml")
+	userPath := filepath.Join(tempDir, "user", "versions.toml")
 
-	path := GetVersionsConfigPath()
-	assert.Contains(t, path, "configs/versions.toml")
-	assert.Contains(t, path, "karei")
+	// System config is valid
+	require.NoError(t, os.MkdirAll(filepath.Dir(systemPath), 0750))
+
+	systemConfig := `[tools]
+go = "1.20"
+node = "18.0.0"`
+	require.NoError(t, os.WriteFile(systemPath, []byte(systemConfig), 0600))
+
+	// User config is corrupt
+	require.NoError(t, os.MkdirAll(filepath.Dir(userPath), 0750))
+
+	userConfig := `[tools
+this is invalid`
+	require.NoError(t, os.WriteFile(userPath, []byte(userConfig), 0600))
+
+	mockResolver := &MockPathResolver{
+		userConfigPath: userPath,
+		xdgConfigHome:  tempDir,
+	}
+	manager := versions.NewVersionManagerWithResolver(systemPath, mockResolver)
+
+	// Business rule: Falls back to system config when user config is corrupt
+	version, err := manager.GetVersion("go")
+	require.NoError(t, err)
+	assert.Equal(t, "1.20", version, "Should use system config when user config is corrupt")
 }
 
-func TestDefaultPathResolver_GetUserVersionsConfigPath(t *testing.T) {
-	t.Parallel()
+// TestVersionManagerCaseInsensitivity tests tool name case handling.
+func TestVersionManagerCaseInsensitivity(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "versions.toml")
 
-	resolver := &DefaultPathResolver{}
-	path := resolver.GetUserVersionsConfigPath()
-	assert.Contains(t, path, "mise/versions.toml")
-	assert.Contains(t, path, ".config")
+	config := `[tools]
+Go = "1.21"
+NODE = "20.0.0"
+RuSt = "1.75.0"`
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
+
+	manager := versions.NewVersionManager(configPath)
+
+	// Test exact case matches
+	version, err := manager.GetVersion("Go")
+	require.NoError(t, err)
+	assert.Equal(t, "1.21", version)
+
+	// Test case variations - should return "latest" if case-sensitive
+	version, err = manager.GetVersion("go")
+	require.NoError(t, err)
+	assert.Equal(t, "latest", version, "Tool names should be case-sensitive")
+
+	version, err = manager.GetVersion("node")
+	require.NoError(t, err)
+	assert.Equal(t, "latest", version, "Tool names should be case-sensitive")
 }

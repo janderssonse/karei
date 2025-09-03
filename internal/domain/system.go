@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package domain provides system entities and business logic.
 package domain
+
+const (
+	distroArch = "arch"
+	distroRHEL = "rhel"
+)
 
 // Distribution represents a Linux distribution.
 type Distribution struct {
@@ -27,7 +31,7 @@ type PackageManager struct {
 	Command string        `json:"command"`
 }
 
-// SystemInfo contains comprehensive system information.
+// SystemInfo contains system information.
 type SystemInfo struct {
 	Distribution       *Distribution       `json:"distribution"`
 	DesktopEnvironment *DesktopEnvironment `json:"desktop_environment"`
@@ -36,22 +40,28 @@ type SystemInfo struct {
 	Kernel             string              `json:"kernel"`
 }
 
-// IsLinux checks if the system is Linux-based.
-func (s *SystemInfo) IsLinux() bool {
+// IsDebianBased checks if the system is Debian/Ubuntu-based.
+func (s *SystemInfo) IsDebianBased() bool {
 	return s.Distribution != nil &&
 		(s.Distribution.ID == "ubuntu" || s.Distribution.Family == "debian")
+}
+
+// IsLinux checks if the system is Linux-based.
+// Deprecated: Use IsDebianBased() for Debian/Ubuntu systems.
+func (s *SystemInfo) IsLinux() bool {
+	return s.IsDebianBased()
 }
 
 // IsFedora checks if the system is Fedora-based.
 func (s *SystemInfo) IsFedora() bool {
 	return s.Distribution != nil &&
-		(s.Distribution.ID == "fedora" || s.Distribution.Family == "rhel")
+		(s.Distribution.ID == "fedora" || s.Distribution.Family == distroRHEL)
 }
 
 // IsArch checks if the system is Arch-based.
 func (s *SystemInfo) IsArch() bool {
 	return s.Distribution != nil &&
-		(s.Distribution.ID == "arch" || s.Distribution.Family == "arch")
+		(s.Distribution.ID == distroArch || s.Distribution.Family == distroArch)
 }
 
 // IsGNOME checks if the desktop environment is GNOME.

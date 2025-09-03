@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package isolated provides isolated filesystem testing utilities.
+// Package isolated creates temporary filesystems for testing.
 package isolated
 
 import (

@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package console provides terminal I/O and user interaction utilities for Karei.
 package console
 
 import (
@@ -95,7 +94,7 @@ func AddConfigMarker(content string, format string) string {
 	}
 }
 
-// GetTimestamp returns current date in YYYY-MM-DD format.
+// GetTimestamp formats current date as YYYY-MM-DD.
 func GetTimestamp() string {
 	return time.Now().Format("2006-01-02")
 }

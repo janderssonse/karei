@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package styles provides consistent styling for the TUI interface.
+// Package styles defines consistent visual styling for TUI components.
 package styles
 
 import (

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package platform provides shared file management functionality.
+// Package platform handles cross-platform file operations.
 package platform
 
 import (

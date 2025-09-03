@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package patterns provides factory and design pattern implementations for Karei.
 package patterns
 
 import (
@@ -13,12 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/janderssonse/karei/internal/adapters/platform"
+	"github.com/janderssonse/karei/internal/application"
 	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/config"
 	"github.com/janderssonse/karei/internal/console"
-	"github.com/janderssonse/karei/internal/fonts"
 	"github.com/janderssonse/karei/internal/system"
-	"github.com/janderssonse/karei/internal/themes"
 )
 
 const (
@@ -212,139 +211,23 @@ func applyThemeHandler(ctx context.Context, theme string) error {
 }
 
 func applyThemeHandlerWithDryRun(ctx context.Context, theme string, dryRun bool) error {
-	var (
-		appliedApps []string
-		failedApps  []string
-		skippedApps []string
-	)
+	// Create theme service with dependencies
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(false, dryRun)
+	configPath := config.GetXDGConfigHome()
+	themesPath := filepath.Join(config.GetKareiPath(), "themes")
 
-	// Track all applications we attempt to theme
-	allApps := []string{"GNOME", "Chrome", "VSCode", ghosttyApp, "btop", "zellij"}
+	themeService := application.NewThemeService(fileManager, commandRunner, configPath, themesPath)
 
-	console.DefaultOutput.Progressf("Applying %s theme to %d applications...", theme, len(allApps))
+	// Apply theme using the service
+	if err := themeService.ApplyTheme(ctx, theme); err != nil {
+		console.DefaultOutput.Warningf("Failed to apply theme: %v", err)
+		return err
+	}
 
-	// Apply native theme integrations
-	applyNativeThemes(ctx, theme, dryRun, &appliedApps, &failedApps)
-
-	// Apply to config-file based applications
-	applyConfigFileThemes(theme, &appliedApps, &failedApps, &skippedApps)
-
-	// Display results summary
-	displayThemeResults(theme, appliedApps, failedApps, skippedApps)
+	console.DefaultOutput.Successf("Theme '%s' applied successfully", theme)
 
 	return nil
-}
-
-func applyNativeThemes(ctx context.Context, theme string, dryRun bool, appliedApps *[]string, failedApps *[]string) {
-	// Apply GNOME theme
-	if err := themes.ApplyGnomeThemeWithOptions(ctx, theme, dryRun); err != nil {
-		console.DefaultOutput.Warningf("Failed to apply GNOME theme: %v", err)
-
-		*failedApps = append(*failedApps, "GNOME")
-	} else {
-		console.DefaultOutput.Successf("GNOME theme applied")
-
-		*appliedApps = append(*appliedApps, "GNOME")
-	}
-
-	// Apply Chrome theme
-	if err := themes.ApplyChromeTheme(ctx, theme); err != nil {
-		console.DefaultOutput.Warningf("Failed to apply Chrome theme: %v", err)
-
-		*failedApps = append(*failedApps, "Chrome")
-	} else {
-		console.DefaultOutput.Successf("Chrome theme applied")
-
-		*appliedApps = append(*appliedApps, "Chrome")
-	}
-
-	// Apply VSCode theme
-	if err := themes.ApplyVSCodeTheme(ctx, theme); err != nil {
-		console.DefaultOutput.Warningf("Failed to apply VSCode theme: %v", err)
-
-		*failedApps = append(*failedApps, "VSCode")
-	} else {
-		console.DefaultOutput.Successf("VSCode theme applied")
-
-		*appliedApps = append(*appliedApps, "VSCode")
-	}
-}
-
-func applyConfigFileThemes(theme string, appliedApps *[]string, failedApps *[]string, skippedApps *[]string) {
-	applications := []string{ghosttyApp, "btop", "zellij"}
-
-	for _, app := range applications {
-		srcPath, dstPath := getThemePaths(theme, app)
-
-		if !system.FileExists(srcPath) {
-			console.DefaultOutput.Progressf("%s theme not available for this app", app)
-			*skippedApps = append(*skippedApps, app)
-
-			continue
-		}
-
-		if err := system.CopyFile(srcPath, dstPath); err != nil {
-			console.DefaultOutput.Warningf("Failed to apply %s theme to %s: %v", theme, app, err)
-			*failedApps = append(*failedApps, app)
-		} else {
-			console.DefaultOutput.Successf("%s theme applied", app)
-			*appliedApps = append(*appliedApps, app)
-		}
-	}
-}
-
-func getThemePaths(theme string, app string) (string, string) {
-	var srcPath, dstPath string
-
-	switch app {
-	case ghosttyApp:
-		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, ghosttyApp+".conf")
-		dstPath = filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "theme.conf")
-	case "btop":
-		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, "btop.theme")
-		dstPath = filepath.Join(config.GetXDGConfigHome(), "btop", "themes", theme+".theme")
-	case "zellij":
-		srcPath = filepath.Join(config.GetKareiPath(), "themes", theme, "zellij.kdl")
-		dstPath = filepath.Join(config.GetXDGConfigHome(), "zellij", "themes", theme+".kdl")
-	}
-
-	return srcPath, dstPath
-}
-
-func displayThemeResults(theme string, appliedApps []string, failedApps []string, skippedApps []string) {
-	fmt.Println()
-	fmt.Printf("✓ Theme '%s' application complete:\n", theme)
-
-	if len(appliedApps) > 0 {
-		fmt.Printf("  Successfully themed (%d apps):\n", len(appliedApps))
-
-		for _, app := range appliedApps {
-			fmt.Printf("    ✓ %s\n", app)
-		}
-	}
-
-	if len(failedApps) > 0 {
-		fmt.Printf("  Failed to theme (%d apps):\n", len(failedApps))
-
-		for _, app := range failedApps {
-			fmt.Printf("    ✗ %s\n", app)
-		}
-	}
-
-	if len(skippedApps) > 0 {
-		fmt.Printf("  Skipped (%d apps not installed or theme unavailable):\n", len(skippedApps))
-
-		for _, app := range skippedApps {
-			fmt.Printf("    - %s\n", app)
-		}
-	}
-
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Printf("  Restart applications to see theme changes\n")
-	fmt.Printf("  Switch themes anytime: karei theme <name>\n")
-	fmt.Printf("  View available themes: karei theme list\n")
-	fmt.Printf("  Check system status: karei status\n")
 }
 
 func applyFontHandler(ctx context.Context, font string) error {
@@ -352,36 +235,32 @@ func applyFontHandler(ctx context.Context, font string) error {
 }
 
 func applyFontHandlerWithDryRun(ctx context.Context, font string, dryRun bool) error {
-	// Download and install font if needed
-	if err := fonts.DownloadAndInstallFontWithOptions(ctx, font, dryRun); err != nil {
-		fmt.Printf("Warning: Failed to install font %s: %v\n", font, err)
+	// Create font service with dependencies
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(false, dryRun)
+
+	home, _ := os.UserHomeDir()
+	fontsDir := filepath.Join(home, ".local", "share", "fonts")
+	configDir := config.GetXDGConfigHome()
+
+	// Create network client
+	networkClient := platform.NewNetworkAdapter()
+
+	fontService := application.NewFontService(fileManager, commandRunner, networkClient, fontsDir, configDir)
+
+	// Download and install font
+	if err := fontService.DownloadAndInstallFont(ctx, font); err != nil {
+		console.DefaultOutput.Warningf("Failed to install font: %v", err)
+		return err
 	}
 
-	// Apply system-wide font settings
-	if err := fonts.ApplySystemFontWithOptions(ctx, font, dryRun); err != nil {
-		fmt.Printf("Warning: Failed to apply system font: %v\n", err)
+	// Apply system font
+	if err := fontService.ApplySystemFont(ctx, font); err != nil {
+		console.DefaultOutput.Warningf("Failed to apply system font: %v", err)
+		return err
 	}
 
-	// Apply to terminal applications
-	applications := []string{ghosttyApp}
-
-	for _, app := range applications {
-		srcPath := filepath.Join(config.GetKareiPath(), "configs", app, "fonts", font+".conf")
-		if !system.FileExists(srcPath) {
-			continue
-		}
-
-		var dstPath string
-		if app == ghosttyApp {
-			dstPath = filepath.Join(config.GetXDGConfigHome(), ghosttyApp, "font.conf")
-		}
-
-		if err := system.CopyFile(srcPath, dstPath); err != nil {
-			fmt.Printf("Warning: Failed to apply %s font to %s: %v\n", font, app, err)
-		}
-	}
-
-	fmt.Printf("✓ Font '%s' applied successfully\n", font)
+	console.DefaultOutput.Successf("Font '%s' applied successfully", font)
 
 	return nil
 }
@@ -792,22 +671,8 @@ func showInstallLogsHandler(ctx context.Context, _ string) error {
 	return showLogFile(ctx, logPath, "Installation")
 }
 
-// showInstallLogsHandlerWithPath shows install logs with custom path for testing.
-func showInstallLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error {
-	logPath := filepath.Join(xdgDataHome, "karei", "install.log")
-
-	return showLogFile(ctx, logPath, "Installation")
-}
-
 func showProgressLogsHandler(ctx context.Context, _ string) error {
 	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "progress.log")
-
-	return showLogFile(ctx, logPath, "Progress")
-}
-
-// showProgressLogsHandlerWithPath shows progress logs with custom path for testing.
-func showProgressLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error {
-	logPath := filepath.Join(xdgDataHome, "karei", "progress.log")
 
 	return showLogFile(ctx, logPath, "Progress")
 }
@@ -818,22 +683,8 @@ func showPrecheckLogsHandler(ctx context.Context, _ string) error {
 	return showLogFile(ctx, logPath, "Precheck")
 }
 
-// showPrecheckLogsHandlerWithPath shows precheck logs with custom path for testing.
-func showPrecheckLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error {
-	logPath := filepath.Join(xdgDataHome, "karei", "precheck.log")
-
-	return showLogFile(ctx, logPath, "Precheck")
-}
-
 func showErrorLogsHandler(ctx context.Context, _ string) error {
 	logPath := filepath.Join(config.GetXDGDataHome(), "karei", "errors.log")
-
-	return showLogFile(ctx, logPath, "Errors")
-}
-
-// showErrorLogsHandlerWithPath shows error logs with custom path for testing.
-func showErrorLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error {
-	logPath := filepath.Join(xdgDataHome, "karei", "errors.log")
 
 	return showLogFile(ctx, logPath, "Errors")
 }
@@ -844,24 +695,6 @@ func showAllLogsHandler(ctx context.Context, _ string) error { //nolint:unparam
 		showProgressLogsHandler,
 		showPrecheckLogsHandler,
 		showErrorLogsHandler,
-	}
-
-	for _, handler := range handlers {
-		_ = handler(ctx, "")
-
-		fmt.Println()
-	}
-
-	return nil
-}
-
-// showAllLogsHandlerWithPath shows all logs with custom path for testing.
-func showAllLogsHandlerWithPath(ctx context.Context, xdgDataHome string) error { //nolint:unparam
-	handlers := []func(context.Context, string) error{
-		func(ctx context.Context, _ string) error { return showInstallLogsHandlerWithPath(ctx, xdgDataHome) },
-		func(ctx context.Context, _ string) error { return showProgressLogsHandlerWithPath(ctx, xdgDataHome) },
-		func(ctx context.Context, _ string) error { return showPrecheckLogsHandlerWithPath(ctx, xdgDataHome) },
-		func(ctx context.Context, _ string) error { return showErrorLogsHandlerWithPath(ctx, xdgDataHome) },
 	}
 
 	for _, handler := range handlers {
@@ -1073,7 +906,7 @@ func NewSecurityCommand(verbose bool) *UniversalCommand {
 	return NewUniversalCommand(CommandConfig{
 		Name:  "security",
 		Usage: "Run security checks and tools",
-		Description: `Execute comprehensive security audits and configure monitoring tools.
+		Description: `Execute security audits and configure monitoring tools.
 
 AVAILABLE TOOLS:
   audit      Run system security audit
@@ -1084,7 +917,7 @@ AVAILABLE TOOLS:
   aide       File integrity monitoring
 
 EXAMPLES:
-  karei security audit      Run comprehensive security audit
+  karei security audit      Run security audit
   karei security firewall   Configure basic firewall protection
 
 DOCUMENTATION:
@@ -1108,7 +941,7 @@ func NewVerifyCommand(verbose bool) *UniversalCommand {
 	return NewUniversalCommand(CommandConfig{
 		Name:        "verify",
 		Usage:       "Verify system configuration",
-		Description: "Run comprehensive verification checks",
+		Description: "Run verification checks",
 		Type:        TypeVerify,
 		Available:   []string{"tools", "integrations", "path", "fish", "xdg", "versions", "all"},
 		Interactive: true,

@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package domain provides core package entities and business logic.
 package domain
 
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 var (
@@ -18,6 +18,8 @@ var (
 	ErrUnsupportedInstallMethod = errors.New("unsupported installation method")
 	// ErrUnsupportedRemoveMethod indicates the removal method is not supported.
 	ErrUnsupportedRemoveMethod = errors.New("unsupported removal method")
+	// ErrInsufficientSpace indicates there is not enough disk space for installation.
+	ErrInsufficientSpace = errors.New("insufficient disk space")
 )
 
 // InstallMethod represents different installation methods.
@@ -57,7 +59,12 @@ type Package struct {
 
 // IsValid validates the package has required fields.
 func (p *Package) IsValid() bool {
-	return p.Name != "" && p.Method != "" && p.Source != ""
+	// Trim whitespace to check for actual content
+	name := strings.TrimSpace(p.Name)
+	method := strings.TrimSpace(string(p.Method))
+	source := strings.TrimSpace(p.Source)
+
+	return name != "" && method != "" && source != ""
 }
 
 // InstallationResult represents the result of a package installation.
@@ -69,13 +76,13 @@ type InstallationResult struct {
 	Output   string   `json:"output,omitempty"`
 }
 
-// PackageService defines the core package management operations.
+// PackageService provides core package management operations.
 type PackageService struct {
 	installer PackageInstaller
 	detector  SystemDetector
 }
 
-// NewPackageService creates a new package service with the provided dependencies.
+// NewPackageService creates a PackageService.
 func NewPackageService(installer PackageInstaller, detector SystemDetector) *PackageService {
 	return &PackageService{
 		installer: installer,

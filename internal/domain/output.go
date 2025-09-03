@@ -6,7 +6,7 @@ package domain
 import "time"
 
 // OutputPort defines the interface for presenting command results.
-// This is a domain port that adapters implement for different output formats.
+// Adapters implement this port for different output formats (JSON, plain text, etc).
 type OutputPort interface {
 	// Success outputs a success message with optional structured data
 	Success(message string, data any) error
