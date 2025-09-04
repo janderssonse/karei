@@ -89,7 +89,7 @@ cat ~/.local/share/karei/installed-packages.txt
 
 ## Getting Help
 
-Since this is a WIP project not accepting contributions yet, please:
+For help:
 1. Check existing documentation in `docs/`
 2. Review the source code
-3. Wait for a proper release with support channels
+3. Check GitHub issues for similar problems

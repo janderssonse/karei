@@ -174,11 +174,9 @@ func TestVersionManagerWithPermissionError(t *testing.T) {
 go = "1.21"`
 	require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
 
-	// Make file unreadable (only works on Unix-like systems)
+	// Make file unreadable
 	err := os.Chmod(configPath, 0000)
-	if err != nil {
-		t.Skip("Cannot test permission errors on this system")
-	}
+	require.NoError(t, err, "Failed to change file permissions")
 
 	defer func() {
 		_ = os.Chmod(configPath, 0600) // Restore permissions for cleanup

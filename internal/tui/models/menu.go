@@ -128,7 +128,7 @@ func (m *Menu) View() string {
 	return menu
 }
 
-// GetSelectedAction returns the action of the currently selected menu item.
+// GetSelectedAction returns the action identifier of the selected menu item.
 func (m *Menu) GetSelectedAction() string {
 	if m.cursor >= 0 && m.cursor < len(m.items) {
 		return m.items[m.cursor].Action

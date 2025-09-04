@@ -2,7 +2,7 @@
 
 ## Linux development environment automation
 
-> ⚠️ **Work in Progress**: This project is under active development. Many features are incomplete or broken. Please wait for a proper release before using in any real environment. Not accepting PRs or looking for contributors at this time.
+> ⚠️ **Work in Progress**: This project is under active development. Many features are incomplete or broken. Please wait for a stable release before using in production environments.
 
 ## What is Karei?
 
@@ -13,12 +13,12 @@ Think of it as a way to go from a fresh Linux install to a fully configured deve
 ## Design Goals
 
 - **Clean Architecture**: Uses hexagonal architecture to separate core logic from platform-specific code
-- **Multi-Distribution**: Ubuntu now, Debian, Fedora and openSUSE planned
+- **Multi-Distribution**: Ubuntu now (Debian, Fedora, openSUSE on roadmap)
 - **Single Binary**: Written in Go, no runtime dependencies
-- **Testable**: Comprehensive test coverage for reliability
+- **Testable**: Well-tested with good coverage
 - **Modern Tools**: Fish shell, Neovim, Podman, and modern CLI replacements
 
-## Quick Start (when ready)
+## Quick Start
 
 ```bash
 # Download and run
@@ -52,7 +52,7 @@ karei uninstall --all    # Remove everything
 
 - **Working**: Basic Ubuntu package installation, theme system
 - **Broken/Missing**: Most things
-- **Planned**: Debian, Fedora, openSUSE support
+- **Roadmap**: Debian, Fedora, openSUSE support
 
 ## Documentation
 
@@ -60,7 +60,7 @@ karei uninstall --all    # Remove everything
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Architecture](docs/HEXAGONAL_ARCHITECTURE.md)
 - [TUI Design](docs/tui-architecture.md)
-- [Contributing](CONTRIBUTING.md) (for future reference)
+- [Contributing](CONTRIBUTING.md)
 
 ## Development
 

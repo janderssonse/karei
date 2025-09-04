@@ -3,10 +3,11 @@
 
 [global]
 # Disable rules that are too strict for documentation
-disable = ["MD013", "MD024", "MD033", "MD052"]
+disable = ["MD013", "MD024", "MD033", "MD041", "MD052"]
 
 # MD013: Line length - Documentation often requires longer lines for URLs,
 #        code examples, and technical descriptions
 # MD024: Duplicate headings - May be needed in different sections
-# MD033: Inline HTML - Sometimes needed for complex formatting  
+# MD033: Inline HTML - Sometimes needed for complex formatting
+# MD041: First line heading - SPDX license headers must come first
 # MD052: Reference links - Cross-file references are valid

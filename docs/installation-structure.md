@@ -1,5 +1,3 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 

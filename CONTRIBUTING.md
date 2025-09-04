@@ -1,6 +1,6 @@
 # Contributing to Karei
 
-> ⚠️ **Note**: Not accepting PRs or looking for contributors at this time. This document is for future reference.
+> ⚠️ **Note**: This project is under active development. Please open an issue to discuss changes before submitting PRs.
 
 ## Development Workflow
 

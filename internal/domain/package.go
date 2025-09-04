@@ -82,7 +82,7 @@ type PackageService struct {
 	detector  SystemDetector
 }
 
-// NewPackageService creates a PackageService.
+// NewPackageService creates a service with installer and detector ports.
 func NewPackageService(installer PackageInstaller, detector SystemDetector) *PackageService {
 	return &PackageService{
 		installer: installer,

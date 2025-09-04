@@ -27,7 +27,7 @@ type FontService struct {
 	configDir     string
 }
 
-// NewFontService creates a FontService.
+// NewFontService creates a service for managing system fonts.
 func NewFontService(fm domain.FileManager, cr domain.CommandRunner, nc domain.NetworkClient, fontsDir, configDir string) *FontService {
 	return &FontService{
 		fileManager:   fm,

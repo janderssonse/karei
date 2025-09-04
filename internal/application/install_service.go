@@ -10,13 +10,13 @@ import (
 	"github.com/janderssonse/karei/internal/domain"
 )
 
-// InstallService installs packages with automatic system detection.
+// InstallService orchestrates package installation with automatic method selection.
 type InstallService struct {
 	packageService *domain.PackageService
 	systemDetector domain.SystemDetector
 }
 
-// NewInstallService creates an InstallService.
+// NewInstallService creates a service with system detection capabilities.
 func NewInstallService(packageService *domain.PackageService, systemDetector domain.SystemDetector) *InstallService {
 	return &InstallService{
 		packageService: packageService,
@@ -24,7 +24,7 @@ func NewInstallService(packageService *domain.PackageService, systemDetector dom
 	}
 }
 
-// InstallApplication installs an application, automatically detecting the best method.
+// InstallApplication detects optimal method and installs via appropriate manager.
 func (s *InstallService) InstallApplication(ctx context.Context, name, source string) (*domain.InstallationResult, error) {
 	// Detect system information
 	systemInfo, err := s.systemDetector.DetectSystem(ctx)
@@ -43,7 +43,7 @@ func (s *InstallService) InstallApplication(ctx context.Context, name, source st
 	return s.packageService.Install(ctx, pkg)
 }
 
-// InstallMultipleApplications installs multiple applications in sequence.
+// InstallMultipleApplications processes batch installations with error aggregation.
 func (s *InstallService) InstallMultipleApplications(ctx context.Context, apps map[string]string) ([]*domain.InstallationResult, error) {
 	results := make([]*domain.InstallationResult, 0, len(apps))
 
@@ -64,12 +64,12 @@ func (s *InstallService) InstallMultipleApplications(ctx context.Context, apps m
 	return results, nil
 }
 
-// GetSystemInfo detects the current system's distribution and package manager.
+// GetSystemInfo returns detected distribution and available package managers.
 func (s *InstallService) GetSystemInfo(ctx context.Context) (*domain.SystemInfo, error) {
 	return s.systemDetector.DetectSystem(ctx)
 }
 
-// ListInstalledPackages returns all installed packages.
+// ListInstalledPackages queries the package service for installed software.
 func (s *InstallService) ListInstalledPackages(ctx context.Context) ([]*domain.Package, error) {
 	return s.packageService.List(ctx)
 }

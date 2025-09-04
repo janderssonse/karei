@@ -146,12 +146,6 @@ func TestUninstaller_UninstallAppWithDifferentMethods(t *testing.T) {
 			// The mock will handle the command without executing
 			err := uninstaller.UninstallApp(ctx, tt.appName)
 
-			// If app is unknown, skip the test
-			if errors.Is(err, uninstall.ErrUnknownApp) {
-				t.Skipf("App %s not in catalog", tt.appName)
-				return
-			}
-
 			// Special apps or recognized apps should have attempted commands
 			if err == nil {
 				assert.NotEmpty(t, mock.Commands, "Uninstall should attempt commands for known apps")

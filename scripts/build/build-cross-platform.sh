@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-# Builds reproducible cross-platform binaries with security hardening, PIE, static linking, CPU optimizations, and build metadata.
+# Builds reproducible cross-platform binaries
+# Features: security hardening, PIE, static linking, CPU optimization, build metadata
 # Usage: ./scripts/build/build-cross-platform.sh [--brief] [goos] [goarch] [bin_dir] [executable]
 #
 # Output:

@@ -31,6 +31,8 @@ func SetupServiceMocks() (*testutil.MockPackageInstaller, *testutil.MockSystemDe
 }
 
 func TestInstallApplicationWithSystemDetection(t *testing.T) {
+	t.Parallel()
+
 	mockInstaller, mockDetector, service := SetupServiceMocks()
 
 	ctx := context.Background()
@@ -59,6 +61,8 @@ func TestInstallApplicationWithSystemDetection(t *testing.T) {
 }
 
 func TestInstallApplicationHandlesSystemDetectionFailure(t *testing.T) {
+	t.Parallel()
+
 	mockInstaller, mockDetector, service := SetupServiceMocks()
 
 	ctx := context.Background()
@@ -82,6 +86,8 @@ func TestInstallApplicationHandlesSystemDetectionFailure(t *testing.T) {
 }
 
 func TestInstallApplicationWithNoPackageManager(t *testing.T) {
+	t.Parallel()
+
 	mockInstaller, mockDetector, service := SetupServiceMocks()
 
 	ctx := context.Background()
@@ -101,6 +107,8 @@ func TestInstallApplicationWithNoPackageManager(t *testing.T) {
 }
 
 func TestInstallMultipleApplicationsContinuesOnFailure(t *testing.T) {
+	t.Parallel()
+
 	mockInstaller, mockDetector, service := SetupServiceMocks()
 
 	ctx := context.Background()
@@ -158,6 +166,8 @@ func TestInstallMultipleApplicationsContinuesOnFailure(t *testing.T) {
 
 // TestInstallApplicationWithDependencies tests dependency handling.
 func TestInstallApplicationWithDependencies(t *testing.T) {
+	t.Parallel()
+
 	mockInstaller, mockDetector, service := SetupServiceMocks()
 
 	ctx := context.Background()

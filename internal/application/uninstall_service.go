@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/janderssonse/karei/internal/apps"
@@ -27,7 +28,7 @@ type UninstallService struct {
 	verbose       bool
 }
 
-// NewUninstallService creates an UninstallService.
+// NewUninstallService creates a service for removing applications and configurations.
 func NewUninstallService(fm domain.FileManager, cr domain.CommandRunner, pi domain.PackageInstaller, verbose bool) *UninstallService {
 	return &UninstallService{
 		fileManager:   fm,
@@ -160,13 +161,7 @@ func hasSpecialUninstall(appName string) bool {
 		"spotify", "discord", "slack", "teams", "zoom",
 	}
 
-	for _, special := range specialApps {
-		if appName == special {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(specialApps, appName)
 }
 
 // specialUninstall handles special uninstallation cases.

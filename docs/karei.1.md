@@ -1,9 +1,7 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## karei(1) -- Linux development environment automation
+# karei(1) -- Linux development environment automation
 
 ## SYNOPSIS
 
@@ -11,9 +9,9 @@
 
 ## DESCRIPTION
 
-**karei** is a production-ready Linux development environment automation system that transforms fresh Linux installations into fully-configured, modern workstations through comprehensive toolchain automation, coordinated theming, and enterprise-grade security practices.
+**karei** automates Linux development environment setup, configuring tools, themes, and security settings from a fresh installation.
 
-The tool provides coordinated theming across all applications, automated package installation from multiple sources, professional typography management, and comprehensive system verification. It follows Unix conventions with proper exit codes, stream separation, and pipeline-friendly operation.
+The tool provides coordinated theming across applications, automated package installation from multiple sources, typography management, and system verification. It follows Unix conventions with proper exit codes, stream separation, and pipeline-friendly operation.
 
 ## GLOBAL OPTIONS
 

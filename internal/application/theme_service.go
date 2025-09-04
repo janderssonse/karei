@@ -24,7 +24,7 @@ type ThemeService struct {
 	themesPath    string
 }
 
-// NewThemeService creates a ThemeService.
+// NewThemeService creates a service for managing desktop themes.
 func NewThemeService(fm domain.FileManager, cr domain.CommandRunner, configPath, themesPath string) *ThemeService {
 	return &ThemeService{
 		fileManager:   fm,
@@ -352,7 +352,7 @@ func (s *ThemeService) ApplyVSCodeTheme(ctx context.Context, theme *ThemeConfig)
 		return fmt.Errorf("failed to read VSCode settings: %w", err)
 	}
 
-	var settings map[string]interface{}
+	var settings map[string]any
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return fmt.Errorf("failed to parse VSCode settings: %w", err)
 	}
@@ -380,21 +380,21 @@ func (s *ThemeService) ApplyChromeTheme(ctx context.Context, theme *ThemeConfig)
 		return fmt.Errorf("failed to read Chrome preferences: %w", err)
 	}
 
-	var prefs map[string]interface{}
+	var prefs map[string]any
 	if err := json.Unmarshal(data, &prefs); err != nil {
 		return fmt.Errorf("failed to parse Chrome preferences: %w", err)
 	}
 
 	// Update theme settings
-	if extensions, ok := prefs["extensions"].(map[string]interface{}); ok {
-		if theme, ok := extensions["theme"].(map[string]interface{}); ok {
+	if extensions, ok := prefs["extensions"].(map[string]any); ok {
+		if theme, ok := extensions["theme"].(map[string]any); ok {
 			theme["system_theme"] = 2 // Follow system theme
 		}
 	}
 
 	// Update browser color scheme
-	if browser, ok := prefs["browser"].(map[string]interface{}); ok {
-		browser["theme"] = map[string]interface{}{
+	if browser, ok := prefs["browser"].(map[string]any); ok {
+		browser["theme"] = map[string]any{
 			"color_scheme":  theme.ChromeScheme,
 			"color_variant": theme.ChromeVariant,
 			"user_color":    theme.ChromeColor,
@@ -496,11 +496,11 @@ func (s *ThemeService) getTerminalProfilePath(ctx context.Context) (string, erro
 	return fmt.Sprintf("org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:%s/", profileID), nil
 }
 
-func (s *ThemeService) loadTerminalTheme(themeName string) (map[string]interface{}, error) {
+func (s *ThemeService) loadTerminalTheme(themeName string) (map[string]any, error) {
 	themeFile := filepath.Join(s.themesPath, themeName, "gnome-terminal.json")
 	if !s.fileManager.FileExists(themeFile) {
 		// Return empty map instead of nil to avoid nilnil
-		return make(map[string]interface{}), nil
+		return make(map[string]any), nil
 	}
 
 	data, err := s.fileManager.ReadFile(themeFile)
@@ -508,7 +508,7 @@ func (s *ThemeService) loadTerminalTheme(themeName string) (map[string]interface
 		return nil, fmt.Errorf("failed to read theme file: %w", err)
 	}
 
-	var termTheme map[string]interface{}
+	var termTheme map[string]any
 	if err := json.Unmarshal(data, &termTheme); err != nil {
 		return nil, fmt.Errorf("failed to parse theme: %w", err)
 	}
@@ -516,7 +516,7 @@ func (s *ThemeService) loadTerminalTheme(themeName string) (map[string]interface
 	return termTheme, nil
 }
 
-func (s *ThemeService) applyTerminalSettings(ctx context.Context, profilePath string, termTheme map[string]interface{}) error {
+func (s *ThemeService) applyTerminalSettings(ctx context.Context, profilePath string, termTheme map[string]any) error {
 	for key, value := range termTheme {
 		valueStr := s.formatTerminalValue(value)
 		if err := s.commandRunner.Execute(ctx, "gsettings", "set", profilePath, key, valueStr); err != nil {
@@ -527,7 +527,7 @@ func (s *ThemeService) applyTerminalSettings(ctx context.Context, profilePath st
 	return nil
 }
 
-func (s *ThemeService) formatTerminalValue(value interface{}) string {
+func (s *ThemeService) formatTerminalValue(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v

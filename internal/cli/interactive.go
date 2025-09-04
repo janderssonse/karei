@@ -6,13 +6,18 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/janderssonse/karei/internal/adapters/platform"
+	"github.com/janderssonse/karei/internal/application"
 	"github.com/janderssonse/karei/internal/apps"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/console"
 	"github.com/janderssonse/karei/internal/databases"
-	"github.com/janderssonse/karei/internal/patterns"
 )
 
 const (
@@ -222,10 +227,21 @@ func (app *CLI) applyTheme(ctx context.Context, theme string) {
 
 	fmt.Printf("◈ Applying theme: %s\n", theme)
 
-	themeManager := patterns.NewThemeManager(app.verbose)
-	if err := themeManager.Apply(ctx, theme); err != nil {
+	// Create theme service with dependencies
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
+	configPath := config.GetXDGConfigHome()
+	themesPath := filepath.Join(config.GetKareiPath(), "themes")
+
+	themeService := application.NewThemeService(fileManager, commandRunner, configPath, themesPath)
+
+	// Apply theme using the service
+	if err := themeService.ApplyTheme(ctx, theme); err != nil {
 		fmt.Printf("⚠ Theme error: %v\n", err)
+		return
 	}
+
+	console.DefaultOutput.Successf("Theme '%s' applied successfully", theme)
 }
 
 func (app *CLI) applyFont(ctx context.Context, font string) {
@@ -235,10 +251,30 @@ func (app *CLI) applyFont(ctx context.Context, font string) {
 
 	fmt.Printf("◈ Installing font: %s\n", font)
 
-	fontManager := patterns.NewFontManager(app.verbose)
-	if err := fontManager.Apply(ctx, font); err != nil {
+	// Create font service with dependencies
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
+	networkClient := platform.NewNetworkAdapter()
+
+	home, _ := os.UserHomeDir()
+	fontsDir := filepath.Join(home, ".local", "share", "fonts")
+	configDir := config.GetXDGConfigHome()
+
+	fontService := application.NewFontService(fileManager, commandRunner, networkClient, fontsDir, configDir)
+
+	// Download and install font
+	if err := fontService.DownloadAndInstallFont(ctx, font); err != nil {
 		fmt.Printf("⚠ Font error: %v\n", err)
+		return
 	}
+
+	// Apply system font
+	if err := fontService.ApplySystemFont(ctx, font); err != nil {
+		fmt.Printf("⚠ Font error: %v\n", err)
+		return
+	}
+
+	console.DefaultOutput.Successf("Font '%s' applied successfully", font)
 }
 
 func (app *CLI) installAppGroups(ctx context.Context, groups []string) {

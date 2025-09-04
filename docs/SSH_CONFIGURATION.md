@@ -1,11 +1,20 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## SSH Configuration in Karei
+# SSH Configuration in Karei
 
 Karei provides a professional SSH setup with modern security practices and a flexible override system that allows you to customize settings without breaking updates.
+
+## Table of Contents
+
+- [Configuration Architecture](#configuration-architecture)
+- [Professional Features Included](#professional-features-included)
+- [Adding Personal SSH Overrides](#adding-personal-ssh-overrides)
+- [SSH Key Management](#ssh-key-management)
+- [Working with Multiple Keys](#working-with-multiple-keys)
+- [Advanced Configuration Examples](#advanced-configuration-examples)
+- [Troubleshooting](#troubleshooting)
+- [Security Best Practices](#security-best-practices)
 
 ## Configuration Architecture
 

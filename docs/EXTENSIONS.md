@@ -1,9 +1,7 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## Karei Extensions
+# Karei Extensions
 
 This document catalogs community-developed extensions and customizations for the Karei Ubuntu development environment automation system.
 
@@ -34,7 +32,7 @@ Community extensions should adhere to the following standards to ensure compatib
 1. **XDG Base Directory Compliance**: Use standard XDG environment variables for configuration and data storage
 2. **Non-destructive Installation**: Extensions must not modify core Karei files
 3. **Atomic Operations**: All configuration changes should be reversible and atomic
-4. **Error Handling**: Implement comprehensive error handling with clear user feedback
+4. **Error Handling**: Implement proper error handling with clear user feedback
 5. **Logging Integration**: Use Karei logging patterns for consistency
 
 #### Security Standards
@@ -47,7 +45,7 @@ Community extensions should adhere to the following standards to ensure compatib
 #### Documentation Requirements
 
 1. **Installation Instructions**: Clear setup and integration procedures
-2. **Configuration Documentation**: Comprehensive configuration options
+2. **Configuration Documentation**: All configuration options
 3. **Compatibility Matrix**: Supported Karei versions and environments
 4. **Troubleshooting Guide**: Common issues and resolution procedures
 
@@ -72,7 +70,7 @@ Community extensions should adhere to the following standards to ensure compatib
 
 To have your extension listed in this document:
 
-1. **Repository Setup**: Create a public repository with comprehensive documentation
+1. **Repository Setup**: Create a public repository with complete documentation
 2. **Testing**: Validate compatibility with current Karei release
 3. **Documentation**: Include all required documentation sections
 4. **Security Review**: Ensure adherence to security standards

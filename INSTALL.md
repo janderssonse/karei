@@ -10,7 +10,7 @@
 
 ## Installation Methods
 
-### Quick Install (when available)
+### Quick Install
 
 ```bash
 # Install latest release

@@ -45,7 +45,7 @@ func (h *BaseHandler) WithTimeout(ctx context.Context) (context.Context, context
 	return ctx, func() {}
 }
 
-// GetOutput returns the output adapter.
+// GetOutput returns the output port for CLI rendering.
 func (h *BaseHandler) GetOutput() domain.OutputPort {
 	if h.Output == nil {
 		h.Output = cliAdapter.OutputFromContext(h.JSON, h.Quiet)

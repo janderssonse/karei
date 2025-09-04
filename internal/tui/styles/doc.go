@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package styles defines TUI visual styling.
+// Package styles provides Lipgloss style definitions.
 package styles

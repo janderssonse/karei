@@ -696,10 +696,10 @@ func (m *AppsModel) toggleInstallSelection() {
 	app := cat.apps[cat.currentApp]
 
 	// Defensive check: If app is not installed and has StateUninstall selection,
-	// this is a state corruption bug - reset to StateNone first
+	// reset invalid state - uninstalled apps cannot be marked for uninstall
 	currentState := m.selected[app.Key]
 	if currentState == StateUninstall && !app.Installed {
-		// State corruption: app is marked for uninstall but is not installed
+		// Reset invalid state: app is marked for uninstall but is not installed
 		// This can happen due to race conditions in model caching
 		delete(m.selected, app.Key)
 
@@ -715,10 +715,6 @@ func (m *AppsModel) toggleInstallSelection() {
 	case StateUninstall:
 		m.selected[app.Key] = StateInstall // Switch from uninstall to install
 	}
-
-	// DEBUG: Log final state
-	finalState := m.selected[app.Key]
-	_ = finalState // Keep finalState for potential future use
 }
 
 func (m *AppsModel) markForUninstall() {
@@ -1540,7 +1536,7 @@ func (m *AppsModel) IsSearchActive() bool {
 	return m.searchActive
 }
 
-// GetSearchQuery returns the current search query.
+// GetSearchQuery returns the current search filter text.
 func (m *AppsModel) GetSearchQuery() string {
 	return m.searchQuery
 }

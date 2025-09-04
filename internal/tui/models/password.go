@@ -44,7 +44,7 @@ type PasswordPromptResult struct {
 
 // NewPasswordPrompt creates a new password input screen.
 func NewPasswordPrompt(ctx context.Context, styleConfig *styles.Styles, operations []SelectedOperation) *PasswordPrompt {
-	// Open debug file for password screen logging
+	// Initialize password prompt with operations
 	prompt := &PasswordPrompt{
 		styles:     styleConfig,
 		operations: operations,

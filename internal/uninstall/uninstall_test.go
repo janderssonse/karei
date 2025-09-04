@@ -186,7 +186,7 @@ func TestUninstallMethodSelection(t *testing.T) {
 	}{
 		{
 			name:           "APT packages use apt-get remove",
-			appName:        "vim",
+			appName:        "vlc",
 			expectedMethod: domain.MethodAPT,
 			expectSpecial:  false,
 		},
@@ -197,19 +197,17 @@ func TestUninstallMethodSelection(t *testing.T) {
 			expectSpecial:  true,
 		},
 		{
-			name:           "Docker uses special uninstall",
-			appName:        "docker",
-			expectedMethod: domain.MethodScript,
-			expectSpecial:  true,
+			name:           "Spotify uses flatpak",
+			appName:        "spotify",
+			expectedMethod: domain.MethodFlatpak,
+			expectSpecial:  false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			app, exists := apps.Apps[tc.appName]
-			if !exists {
-				t.Skipf("App %s not in catalog", tc.appName)
-			}
+			require.True(t, exists, "App %s must exist in catalog", tc.appName)
 
 			// Verify the app has expected method
 			assert.Equal(t, tc.expectedMethod, app.Method,

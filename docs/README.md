@@ -1,6 +1,6 @@
 # Karei Documentation
 
-This directory contains comprehensive documentation for Karei in multiple formats.
+This directory contains documentation for Karei in multiple formats.
 
 ## Documentation Hierarchy
 
@@ -14,7 +14,7 @@ This directory contains comprehensive documentation for Karei in multiple format
 
 **Purpose**: Complete reference that stays in sync with installed version
 **Access**: `karei help <command>`, `karei help examples`
-**Content**: Detailed command documentation, comprehensive workflows
+**Content**: Detailed command documentation, complete workflows
 
 ### 3. Manual Pages
 
@@ -24,36 +24,33 @@ This directory contains comprehensive documentation for Karei in multiple format
 
 ### 4. Web Documentation  
 
-**Purpose**: Searchable, linkable, comprehensive guide
-**Access**: <https://docs.karei.org> (planned)
+**Purpose**: Searchable, linkable, complete guide
+**Access**: Web documentation (roadmap)
 **Content**: Full documentation with deep links and search
 
 ## File Organization
 
 ```text
 docs/
-├── README.md              # This file - documentation overview
-├── karei.1.md             # Main manual page source (markdown)
-├── commands/              # Individual command documentation  
-│   ├── theme.md           # Theme command details
-│   ├── install.md         # Install command details
-│   └── ...
-├── workflows/             # Complete workflow guides
-│   ├── fresh-install.md   # New Linux setup guide
-│   ├── development.md     # Development environment setup
-│   └── ...
-└── generated/             # Generated documentation files
-    ├── manpages/          # Generated man pages
-    │   └── karei.1.gz     # Compressed man page for installation
-    └── web/               # Generated web documentation
-        └── ...
+├── README.md                    # This file - documentation overview
+├── karei.1.md                   # Main manual page source
+├── HEXAGONAL_ARCHITECTURE.md    # System architecture design
+├── tui-architecture.md          # TUI implementation details
+├── configuration-patterns.md    # Configuration management patterns
+├── installation-structure.md    # Installation flow documentation
+├── SSH_CONFIGURATION.md         # SSH setup and configuration
+├── GIT_CONFIGURATION.md         # Git setup and configuration
+├── EXTENSIONS.md                # Community extensions catalog
+├── PROXY_SUPPORT.md             # Proxy configuration guide
+├── SECURITY_ASSESSMENT.md       # Security audit and assessment
+└── CLI_OUTPUT.md                # CLI output formatting reference
 ```
 
 ## Documentation Principles
 
 ### Help vs Documentation
 - **Help**: Brief, immediate sense of what the tool does and how to start
-- **Documentation**: Complete details, comprehensive guides, troubleshooting
+- **Documentation**: Complete details, guides, troubleshooting
 
 ### Accessibility
 - **Terminal docs**: Work offline, stay in sync, fast access
@@ -77,11 +74,7 @@ Generate man pages from markdown:
 
 ### Web Documentation
 
-Generate web docs (planned):
-
-```bash
-./scripts/docs/web-docs.sh
-```
+Web documentation generation is on the roadmap.
 
 ### Install Man Pages
 
@@ -110,7 +103,7 @@ sudo mandb
 
 ### Command Documentation  
 - Start with synopsis and description
-- Include comprehensive examples with output
+- Include detailed examples with output
 - Cover all options and edge cases
 - Provide troubleshooting section
 

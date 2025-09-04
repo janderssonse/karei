@@ -1,9 +1,7 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## Karei Configuration Patterns
+# Karei Configuration Patterns
 
 This document defines consistent configuration patterns used throughout Karei to ensure maintainability and user experience.
 

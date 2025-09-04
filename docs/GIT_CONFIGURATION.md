@@ -1,9 +1,7 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## Git Configuration in Karei
+# Git Configuration in Karei
 
 Karei provides a professional Git setup with modern best practices and a flexible override system that allows you to customize settings without breaking updates.
 
@@ -100,7 +98,7 @@ The architecture allows you to add personal settings without modifying Karei's c
 
 ## Available Delta Themes
 
-Karei includes comprehensive delta themes. To change themes, add to your `~/.gitconfig`:
+Karei includes delta themes. To change themes, add to your `~/.gitconfig`:
 
 **Popular themes:**
 

@@ -22,7 +22,7 @@ import (
 	"github.com/janderssonse/karei/internal/console"
 	"github.com/janderssonse/karei/internal/desktop"
 	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/patterns"
+
 	"github.com/janderssonse/karei/internal/system"
 	"github.com/janderssonse/karei/internal/tui"
 	"github.com/janderssonse/karei/internal/uninstall"
@@ -195,42 +195,19 @@ func (app *CLI) Run(ctx context.Context, args []string) error {
 	return app.app.Run(ctx, args)
 }
 
-// createAllCommands creates all CLI commands using universal factory pattern
-// Replaces 20+ individual command constructor functions.
+// createAllCommands creates all CLI commands.
 func (app *CLI) createAllCommands() []*cli.Command {
-	// All commands created using universal factory - no duplicate code
-	commands := []*patterns.UniversalCommand{
-		patterns.NewSecurityCommand(app.verbose),
-		patterns.NewVerifyCommand(app.verbose),
-		patterns.NewLogsCommand(app.verbose),
+	// Direct commands (no patterns abstraction)
+	commands := []*cli.Command{
+		app.createSecurityCommand(),
+		app.createVerifyCommand(),
+		app.createLogsCommand(),
 	}
 
-	// Convert universal commands to cli.Command using adapter pattern
-	cliCommands := make([]*cli.Command, 0, len(commands)+5) // +5 for special commands
-	for _, cmd := range commands {
-		cliCommands = append(cliCommands, app.adaptUniversalCommand(cmd))
-	}
+	// Add remaining special commands
+	commands = append(commands, app.createSpecialCommands()...)
 
-	// Add remaining commands that don't fit universal pattern yet
-	cliCommands = append(cliCommands, app.createSpecialCommands()...)
-
-	return cliCommands
-}
-
-// adaptUniversalCommand converts UniversalCommand to cli.Command.
-func (app *CLI) adaptUniversalCommand(ucmd *patterns.UniversalCommand) *cli.Command {
-	return &cli.Command{
-		Name:        ucmd.Name,
-		Usage:       ucmd.Usage,
-		Description: ucmd.Description,
-		ArgsUsage:   "[option]",
-		Suggest:     true, // Enable suggestions for subcommands too
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			args := cmd.Args().Slice()
-
-			return ucmd.Execute(ctx, args)
-		},
-	}
+	return commands
 }
 
 // createSpecialCommands creates commands that don't fit the universal pattern
@@ -507,7 +484,7 @@ func (app *CLI) createUpdateCommand() *cli.Command {
 				defer cancel()
 			}
 
-			executor := patterns.NewCommandExecutor(app.verbose, false)
+			commandRunner := platform.NewCommandRunner(app.verbose, false)
 			kareiPath := config.GetKareiPath()
 
 			// Check if git is available
@@ -526,7 +503,7 @@ func (app *CLI) createUpdateCommand() *cli.Command {
 			fmt.Printf("  Repository: https://github.com/janderssonse/karei.git\n")
 
 			console.DefaultOutput.Progressf("Updating Karei...")
-			if err := executor.Execute(ctx, "git", "-C", kareiPath, "pull"); err != nil {
+			if err := commandRunner.Execute(ctx, "git", "-C", kareiPath, "pull"); err != nil {
 				return domain.NewExitError(ExitNetworkError, "failed to update from git", err)
 			}
 
@@ -688,29 +665,40 @@ func (app *CLI) runUninstall(ctx context.Context, cmd *cli.Command) error {
 func (app *CLI) runThemeApply(ctx context.Context, cmd *cli.Command) error {
 	themeName := cmd.String("name")
 
-	// Create theme manager
-	themeCmd := patterns.NewThemeCommand(app.verbose)
+	// Apply theme using service directly
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
+	configPath := config.GetXDGConfigHome()
+	themesPath := filepath.Join(config.GetKareiPath(), "themes")
 
-	// Apply the theme
-	return themeCmd.Execute(ctx, []string{themeName})
+	themeService := application.NewThemeService(fileManager, commandRunner, configPath, themesPath)
+
+	if err := themeService.ApplyTheme(ctx, themeName); err != nil {
+		return err
+	}
+
+	console.DefaultOutput.Successf("Theme '%s' applied successfully", themeName)
+	return nil
 }
 
 // runThemeList handles the theme list subcommand.
-func (app *CLI) runThemeList(ctx context.Context, _ *cli.Command) error {
-	// Create theme manager
-	themeCmd := patterns.NewThemeCommand(app.verbose)
+func (app *CLI) runThemeList(_ context.Context, _ *cli.Command) error {
+	// List available themes
+	themes := []string{"tokyo-night", "catppuccin", "nord", "everforest", "gruvbox", "kanagawa", "rose-pine", "gruvbox-light"}
 
-	// List themes
-	return themeCmd.Execute(ctx, []string{"list"})
+	console.DefaultOutput.Result("Available themes:")
+	for _, theme := range themes {
+		console.DefaultOutput.Result("  • " + theme)
+	}
+
+	return nil
 }
 
 // runThemeCurrent handles the theme current subcommand.
-func (app *CLI) runThemeCurrent(ctx context.Context, _ *cli.Command) error {
-	// Create theme manager
-	themeCmd := patterns.NewThemeCommand(app.verbose)
-
-	// Show current theme (empty args shows status)
-	return themeCmd.Execute(ctx, []string{})
+func (app *CLI) runThemeCurrent(_ context.Context, _ *cli.Command) error {
+	// For now, just indicate that current theme detection is not implemented
+	console.DefaultOutput.Result("Current theme detection not yet implemented")
+	return nil
 }
 
 // createFontCommand creates font command with subcommands.
@@ -769,29 +757,49 @@ Examples:
 func (app *CLI) runFontInstall(ctx context.Context, cmd *cli.Command) error {
 	fontName := cmd.String("name")
 
-	// Create font manager
-	fontCmd := patterns.NewFontCommand(app.verbose)
+	// Install font using service directly
+	fileManager := platform.NewFileManager(false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
+	networkClient := platform.NewNetworkAdapter()
 
-	// Install the font
-	return fontCmd.Execute(ctx, []string{fontName})
+	home, _ := os.UserHomeDir()
+	fontsDir := filepath.Join(home, ".local", "share", "fonts")
+	configDir := config.GetXDGConfigHome()
+
+	fontService := application.NewFontService(fileManager, commandRunner, networkClient, fontsDir, configDir)
+
+	// Download and install font
+	if err := fontService.DownloadAndInstallFont(ctx, fontName); err != nil {
+		return err
+	}
+
+	// Apply system font
+	if err := fontService.ApplySystemFont(ctx, fontName); err != nil {
+		return err
+	}
+
+	console.DefaultOutput.Successf("Font '%s' installed successfully", fontName)
+	return nil
 }
 
 // runFontList handles the font list subcommand.
-func (app *CLI) runFontList(ctx context.Context, _ *cli.Command) error {
-	// Create font manager
-	fontCmd := patterns.NewFontCommand(app.verbose)
+func (app *CLI) runFontList(_ context.Context, _ *cli.Command) error {
+	// List available fonts
+	fonts := []string{"CaskaydiaMono", "FiraMono", "JetBrainsMono", "MesloLGS", "BerkeleyMono"}
 
-	// List fonts
-	return fontCmd.Execute(ctx, []string{"list"})
+	console.DefaultOutput.Result("Available fonts:")
+	for _, font := range fonts {
+		console.DefaultOutput.Result("  • " + font)
+	}
+
+	return nil
 }
 
 // runFontCurrent handles the font current subcommand.
-func (app *CLI) runFontCurrent(ctx context.Context, _ *cli.Command) error {
-	// Create font manager
-	fontCmd := patterns.NewFontCommand(app.verbose)
-
-	// Show current font (empty args shows status)
-	return fontCmd.Execute(ctx, []string{})
+func (app *CLI) runFontCurrent(_ context.Context, _ *cli.Command) error {
+	// For now, just indicate that current font detection is not implemented
+	console.DefaultOutput.Result("Current font detection not yet implemented")
+	return nil
 }
 
 // outputUninstallResults outputs the uninstallation results using the output adapter.
@@ -964,12 +972,12 @@ func (app *CLI) getAppDescription(appName string) string {
 
 func (app *CLI) getAppVersion(ctx context.Context, appName string) string {
 	// Try to get version from the app itself
-	executor := patterns.NewCommandExecutor(false, false)
+	commandRunner := platform.NewCommandRunner(false, false)
 
 	// Common version flags
 	versionFlags := []string{"--version", "-v", "version"}
 	for _, flag := range versionFlags {
-		output, err := executor.ExecuteWithOutput(ctx, appName, flag)
+		output, err := commandRunner.ExecuteWithOutput(ctx, appName, flag)
 		if err == nil && output != "" {
 			// Extract version number from output (simplified)
 			lines := strings.Split(output, "\n")
@@ -1211,22 +1219,26 @@ func (app *CLI) showMainMenu() (string, error) {
 	return parts[0], nil
 }
 
-// handleMenuChoice handles menu selections using universal commands.
+// handleMenuChoice handles menu selections.
 func (app *CLI) handleMenuChoice(ctx context.Context, choice string) error {
-	// Create universal command for the choice and execute interactively
-	var universalCmd *patterns.UniversalCommand
-
 	switch choice {
 	case "theme":
-		universalCmd = patterns.NewThemeCommand(app.verbose)
+		// Interactive theme selection would go here
+		console.DefaultOutput.Result("Theme menu not yet implemented")
+		return nil
 	case "font":
-		universalCmd = patterns.NewFontCommand(app.verbose)
+		// Interactive font selection would go here
+		console.DefaultOutput.Result("Font menu not yet implemented")
+		return nil
 	case "security":
-		universalCmd = patterns.NewSecurityCommand(app.verbose)
+		// Show security tools menu
+		return app.runSecurityTool(ctx, "audit")
 	case "verify":
-		universalCmd = patterns.NewVerifyCommand(app.verbose)
+		// Run all verifications
+		return app.runVerification(ctx, "all")
 	case "logs":
-		universalCmd = patterns.NewLogsCommand(app.verbose)
+		// Show all logs
+		return app.showLogs(ctx, "all")
 	case "install":
 		return app.interactiveInstall(ctx)
 	case "update":
@@ -1234,9 +1246,6 @@ func (app *CLI) handleMenuChoice(ctx context.Context, choice string) error {
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownChoice, choice)
 	}
-
-	// Execute universal command interactively
-	return universalCmd.Execute(ctx, []string{})
 }
 
 // interactiveInstall provides simplified interactive installation.
@@ -1263,20 +1272,20 @@ func (app *CLI) interactiveInstall(ctx context.Context) error {
 		input = commonPackages[choice-1]
 	}
 
-	executor := patterns.NewCommandExecutor(app.verbose, false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
 
-	return executor.ExecuteSudo(ctx, "apt-get", "install", "-y", input)
+	return commandRunner.ExecuteSudo(ctx, "apt-get", "install", "-y", input)
 }
 
 // updateKarei performs Karei update.
 func (app *CLI) updateKarei(ctx context.Context) error {
-	executor := patterns.NewCommandExecutor(app.verbose, false)
+	commandRunner := platform.NewCommandRunner(app.verbose, false)
 	kareiPath := config.GetKareiPath()
 
 	fmt.Println("• Connecting to Git repository for update...")
 	fmt.Println("↻ Updating Karei...")
 
-	if err := executor.Execute(ctx, "git", "-C", kareiPath, "pull"); err != nil {
+	if err := commandRunner.Execute(ctx, "git", "-C", kareiPath, "pull"); err != nil {
 		if app.verbose {
 			return fmt.Errorf("failed to update: %w", err)
 		}

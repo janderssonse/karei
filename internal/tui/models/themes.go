@@ -423,7 +423,7 @@ func (m *Themes) View() string {
 	return m.viewport.View()
 }
 
-// GetSelectedTheme returns the currently selected theme.
+// GetSelectedTheme returns the theme at the current selection index.
 func (m *Themes) GetSelectedTheme() Theme {
 	if m.selectedTheme >= 0 && m.selectedTheme < len(m.themes) {
 		return m.themes[m.selectedTheme]

@@ -6,6 +6,7 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
@@ -103,9 +104,7 @@ func (o *OutputState) JSONResult(status string, data map[string]any) {
 	result := map[string]any{
 		"status": status,
 	}
-	for k, v := range data {
-		result[k] = v
-	}
+	maps.Copy(result, data)
 
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		// Best effort - output encoding errors shouldn't crash the program

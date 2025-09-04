@@ -1,9 +1,7 @@
-# Title
-
 <!-- SPDX-FileCopyrightText: 2025 The Karei Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-## Hexagonal Architecture in Karei
+# Hexagonal Architecture in Karei
 
 This document describes the new hexagonal (ports and adapters) architecture implemented in Karei to support multiple Linux distributions.
 
@@ -123,7 +121,7 @@ internal/
 ├── adapters/                 # External implementations
 │   ├── ubuntu/               # Ubuntu-specific adapters
 │   │   └── package_installer.go
-│   ├── fedora/               # Fedora adapters (future)
+│   ├── fedora/               # Fedora adapters (roadmap)
 │   │   └── package_installer.go
 │   └── common/               # Shared adapters
 │       ├── system_detector.go
@@ -131,7 +129,7 @@ internal/
 │       └── file_manager.go
 └── application/              # Use cases
     ├── install_service.go    # Installation orchestration
-    └── theme_service.go      # Theme management (future)
+    └── theme_service.go      # Theme management
 ```
 
 ## Usage Examples

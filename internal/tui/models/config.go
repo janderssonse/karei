@@ -290,7 +290,7 @@ func (m *Config) View() string {
 	return builder.String()
 }
 
-// GetConfiguration returns the current configuration values.
+// GetConfiguration returns all configuration field values as a map.
 func (m *Config) GetConfiguration() map[string]any {
 	config := make(map[string]any)
 

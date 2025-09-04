@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2025 The Karei Authors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package ubuntu provides Ubuntu/Debian package management.
+// Package ubuntu implements domain ports for Ubuntu/Debian systems.
 package ubuntu
