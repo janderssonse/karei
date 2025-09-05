@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/janderssonse/karei/internal/tui/styles"
-	"github.com/mattn/go-runewidth"
 )
 
 // Theme represents a system theme.
@@ -52,9 +51,10 @@ type Themes struct {
 	quitting      bool
 	keyMap        ThemesKeyMap
 
-	// Viewport for proper scrolling (no pagination hacks)
-	viewport viewport.Model
-	ready    bool
+	// Two viewports for split view (idiomatic approach)
+	listViewport    viewport.Model
+	previewViewport viewport.Model
+	ready           bool
 }
 
 // ThemesKeyMap defines key bindings for the themes screen.
@@ -403,8 +403,12 @@ func (m *Themes) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWindowSizeMsg(msg)
 	}
 
-	// Delegate to viewport (idiomatic Bubble Tea pattern from glamour example)
-	m.viewport, cmd = m.viewport.Update(msg)
+	// Delegate to active viewport
+	if m.showPreview {
+		m.previewViewport, cmd = m.previewViewport.Update(msg)
+	} else {
+		m.listViewport, cmd = m.listViewport.Update(msg)
+	}
 
 	return m, cmd
 }
@@ -419,8 +423,24 @@ func (m *Themes) View() string {
 		return "Loading themes..."
 	}
 
-	// Pure view rendering - never call SetContent in View() (idiomatic Bubble Tea)
-	return m.viewport.View()
+	// Render split view with two viewports
+	if m.showPreview && m.height >= 15 {
+		// Simple approach: render viewports directly without additional borders
+		// The content inside viewports already has borders
+		leftColumn := m.listViewport.View()
+		rightColumn := m.previewViewport.View()
+
+		// Join with a small gap between columns
+		return lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			leftColumn,
+			" ", // Single space separator
+			rightColumn,
+		)
+	}
+
+	// Single column view
+	return m.listViewport.View()
 }
 
 // GetSelectedTheme returns the theme at the current selection index.
@@ -439,18 +459,14 @@ func (m *Themes) updateViewportContent() {
 		return
 	}
 
-	// Determine which view to show based on preview state and size
+	// Update list viewport with themes
+	themesContent := m.renderAllThemes()
+	m.listViewport.SetContent(themesContent)
+
+	// Update preview viewport if showing preview
 	if m.showPreview && m.height >= 15 {
-		// Split view: themes list + preview (content area height >= 15)
-		content := m.renderSplitView()
-		m.viewport.SetContent(content)
-		// Reset viewport position when content changes to avoid clipping
-		m.viewport.GotoTop()
-	} else {
-		// Full width themes list (small content area or preview off)
-		content := m.renderThemesList()
-		m.viewport.SetContent(content)
-		m.viewport.GotoTop()
+		previewContent := m.renderPreviewContent()
+		m.previewViewport.SetContent(previewContent)
 	}
 }
 
@@ -477,45 +493,27 @@ func (m *Themes) getThemeStyles(theme Theme) struct {
 	}
 }
 
-// renderPreview renders the theme preview panel following official examples pattern.
-func (m *Themes) renderPreview(columnWidth int) string {
+// renderPreviewContent renders the preview content for the preview viewport.
+func (m *Themes) renderPreviewContent() string {
 	if m.cursor >= len(m.themes) {
 		return ""
 	}
 
 	theme := m.themes[m.cursor]
 
-	// Calculate content width accounting for border and padding
-	var contentWidth int
-	if columnWidth > 0 {
-		contentWidth = columnWidth - 6 // Account for border (2) + padding (2) + margin (2)
-		if contentWidth < 20 {
-			contentWidth = 20 // Minimum for readable content
-		}
-	} else {
-		contentWidth = 30 // Default preview width
-	}
-
-	// Use height-aware rendering if viewport height is limited
-	if m.height > 0 && m.height < 25 {
-		// Use compact preview for smaller heights
-		return m.renderCompactPreview(contentWidth, m.height-5) // Account for header/footer
-	}
-
-	// Complete preview content with all theme information
+	// Build preview sections without worrying about width constraints
 	sections := []string{
-		m.styles.Title.Render("Theme Preview"),
+		m.styles.Title.Render("Theme Preview - " + theme.DisplayName),
 		"",
-		m.renderTerminalDemoWithWidth(theme, contentWidth),
+		m.renderTerminalDemoWithWidth(theme, 0),
 		"",
-		m.renderCodeDemoWithWidth(theme, contentWidth),
+		m.renderCodeDemoWithWidth(theme, 0),
 		"",
-		m.renderColorDemoWithWidth(theme, contentWidth),
+		m.renderColorDemoWithWidth(theme, 0),
 		"",
-		m.renderThemeDetailsWithWidth(theme, contentWidth),
+		m.renderThemeDetailsWithWidth(theme, 0),
 	}
 
-	// Pure Lipgloss composition - complete preview sections
 	return strings.Join(sections, "\n")
 }
 
@@ -536,17 +534,17 @@ func (m *Themes) renderCompactPreview(width, height int) string {
 	}
 
 	sections := []string{
-		m.styles.Title.Render("Theme Preview"),
+		m.styles.Title.Render("Theme Preview - " + theme.DisplayName),
 		"", // Spacing
 	}
 
 	remainingHeight := contentHeight
 
 	// Add terminal demo if space allows
-	if remainingHeight >= 4 {
-		sections = append(sections, m.renderTerminalDemo(theme))
+	if remainingHeight >= 6 {
+		sections = append(sections, m.renderTerminalDemoWithWidth(theme, width))
+		remainingHeight -= 8 // Account for terminal demo with border
 
-		remainingHeight -= 4 // Approximate terminal demo height
 		if remainingHeight > 0 {
 			sections = append(sections, "") // Spacing
 			remainingHeight--
@@ -554,72 +552,86 @@ func (m *Themes) renderCompactPreview(width, height int) string {
 	}
 
 	// Add color demo if space allows
-	if remainingHeight >= 3 {
-		sections = append(sections, m.renderCompactColorDemo(theme, remainingHeight))
+	if remainingHeight >= 5 {
+		sections = append(sections, m.renderCompactColorDemoWithWidth(theme, width, remainingHeight))
+	} else if remainingHeight >= 3 {
+		// Show minimal info
+		sections = append(sections, m.renderMinimalInfo(theme, width))
 	}
 
-	// Join with consistent spacing
-	content := strings.Join(sections, "\n")
-
-	// Apply width constraint to ensure consistent layout
-	if width > 0 {
-		contentStyle := lipgloss.NewStyle().Width(width - 4) // Account for padding
-		content = contentStyle.Render(content)
-	}
-
-	return content
+	// Join sections
+	return strings.Join(sections, "\n")
 }
 
-// renderCompactColorDemo renders a compact color palette preview.
-func (m *Themes) renderCompactColorDemo(theme Theme, height int) string {
-	if height < 2 {
+// renderCompactColorDemoWithWidth renders a compact color palette preview with width constraint.
+func (m *Themes) renderCompactColorDemoWithWidth(theme Theme, width, height int) string {
+	if height < 3 {
 		return "" // Not enough space
 	}
 
 	var builder strings.Builder
-	builder.WriteString("Colors:\n")
+	builder.WriteString("Quick Color Preview\n")
 
-	// Show just the most important colors
+	// Show main colors in compact format
 	colors := []struct {
 		name  string
 		value string
 	}{
-		{"Fg", theme.Colors.Foreground},
-		{"Bg", theme.Colors.Background},
 		{"Primary", theme.Colors.Primary},
+		{"Success", theme.Colors.Success},
+		{"Error", theme.Colors.Error},
+		{"Bg", theme.Colors.Background},
 	}
 
-	linesUsed := 1 // "Colors:" line
 	for _, color := range colors {
-		if linesUsed >= height {
-			break
-		}
-
 		colorSwatch := lipgloss.NewStyle().
 			Background(lipgloss.Color(color.value)).
-			Foreground(lipgloss.Color(theme.Colors.Foreground)).
-			Padding(0, 1).
-			Render("██")
+			Render("  ") // Use spaces for clean rendering
 
-		line := fmt.Sprintf("%s %s", colorSwatch, color.name)
+		line := lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			colorSwatch,
+			" ",
+			color.name,
+			"  ",
+		)
 		builder.WriteString(line)
-
-		if linesUsed < height-1 {
-			builder.WriteString("\n")
-		}
-
-		linesUsed++
 	}
 
-	return builder.String()
+	// Apply width constraint
+	contentWidth := width - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(theme.Colors.Primary)).
+		Width(width - 6). // Account for outer container's padding/border
+		Padding(1).
+		Render(builder.String())
+}
+
+// renderMinimalInfo renders minimal theme information for very constrained spaces.
+func (m *Themes) renderMinimalInfo(theme Theme, width int) string {
+	info := fmt.Sprintf("📝 %s\n🎨 %d variants | 📦 %d apps",
+		theme.Description[:min(40, len(theme.Description))],
+		len(theme.Variants),
+		len(theme.Applications))
+
+	contentWidth := width - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	return lipgloss.NewStyle().
+		Width(width - 6). // Account for outer container
+		Padding(1).
+		Render(info)
 }
 
 // renderColorDemoWithWidth renders color palette preview with responsive width.
 func (m *Themes) renderColorDemoWithWidth(theme Theme, maxWidth int) string {
-	var builder strings.Builder
-
-	builder.WriteString("Color Palette:\n")
-
 	// Color swatches
 	colors := []struct {
 		name  string
@@ -634,70 +646,40 @@ func (m *Themes) renderColorDemoWithWidth(theme Theme, maxWidth int) string {
 		{"Foreground", theme.Colors.Foreground},
 	}
 
-	// Calculate available width for color entries (maxWidth is already content width)
-	availableWidth := maxWidth // No need to subtract padding again
-	if availableWidth < 15 {
-		availableWidth = 15 // Minimum for readable content
-	}
+	// Build color palette
+	var rows []string
+	rows = append(rows, "Color Palette")
+	rows = append(rows, "")
 
 	for _, color := range colors {
-		colorSwatch := lipgloss.NewStyle().
+		// Create the row with plain text alignment first
+		plainRow := fmt.Sprintf("    %-12s %s", color.name, color.value)
+
+		// Now apply the background color ONLY to the first 4 characters
+		// by splitting the string
+		swatch := lipgloss.NewStyle().
 			Background(lipgloss.Color(color.value)).
-			Foreground(lipgloss.Color(theme.Colors.Foreground)).
-			Padding(0, 1).
-			Render("██")
+			Render("    ") // Just the swatch part
 
-		// Truncate color value if line too long (use proper Unicode width)
-		colorValue := color.value
+		// The rest of the row (name + value)
+		rest := plainRow[4:] // Skip the first 4 chars we already rendered
 
-		maxLineLength := availableWidth - 2 - runewidth.StringWidth(color.name) - 3 // swatch + name + spaces
-		if runewidth.StringWidth(colorValue) > maxLineLength && maxLineLength > 3 {
-			colorValue = runewidth.Truncate(colorValue, maxLineLength, "...")
-		}
+		// Combine them
+		row := swatch + rest
 
-		line := fmt.Sprintf("%s %s %s", colorSwatch, color.name, colorValue)
-		builder.WriteString(line)
-		builder.WriteString("\n")
+		rows = append(rows, row)
 	}
 
-	// Responsive width
-	colorWidth := min(maxWidth, 30) // Max 30, but respect column width
-	if colorWidth < 15 {
-		colorWidth = 15 // Minimum readable width
-	}
+	// Join all rows
+	content := strings.Join(rows, "\n")
 
-	// Simple style without border (will be in preview card)
+	// Create bordered box WITHOUT Width constraint
 	colorStyle := lipgloss.NewStyle().
-		Padding(1).
-		Width(colorWidth) // Responsive width
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(theme.Colors.Success)).
+		Padding(1)
 
-	return colorStyle.Render(builder.String())
-}
-
-// renderTerminalDemo renders terminal preview with consistent dimensions.
-func (m *Themes) renderTerminalDemo(theme Theme) string {
-	// Use reusable theme styles (idiomatic pattern)
-	themeStyles := m.getThemeStyles(theme)
-
-	content := fmt.Sprintf("%s\n%s\n%s\n%s",
-		themeStyles.Primary.Render("user@karei:~$ git status"),
-		themeStyles.Success.Render("✓ On branch main"),
-		themeStyles.Error.Render("✗ Uncommitted changes"),
-		themeStyles.Primary.Render("user@karei:~$ _"))
-
-	terminalContent := "Terminal\n" + content
-
-	// Consistent sizing with theme colors
-	terminalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(theme.Colors.Primary)).
-		Background(lipgloss.Color(theme.Colors.Background)).
-		Foreground(lipgloss.Color(theme.Colors.Foreground)).
-		Padding(1).
-		Height(7). // Fixed height - idiomatic consistent sizing
-		Width(30)  // Fixed width for consistency
-
-	return terminalStyle.Render(terminalContent)
+	return colorStyle.Render(content)
 }
 
 // renderTerminalDemoWithWidth renders terminal preview with responsive width.
@@ -705,25 +687,28 @@ func (m *Themes) renderTerminalDemoWithWidth(theme Theme, maxWidth int) string {
 	// Use reusable theme styles (idiomatic pattern)
 	themeStyles := m.getThemeStyles(theme)
 
-	content := fmt.Sprintf("%s\n%s\n%s",
+	// Build lines applying style to ENTIRE line to avoid alignment issues
+	// Use ASCII characters instead of Unicode to avoid width calculation issues
+	lines := []string{
+		"Terminal Preview",
+		"",
 		themeStyles.Primary.Render("$ git status"),
-		themeStyles.Success.Render("✓ Clean"),
-		themeStyles.Error.Render("✗ 2 changes"))
-
-	terminalContent := "Terminal\n" + content
-
-	// Responsive width - fit within column
-	terminalWidth := min(maxWidth, 30) // Max 30, but respect column width
-	if terminalWidth < 15 {
-		terminalWidth = 15 // Minimum readable width
+		themeStyles.Success.Render("[OK] On branch main"),
+		themeStyles.Warning.Render("[!] Your branch is up to date"),
+		themeStyles.Error.Render("[X] Untracked files present"),
+		themeStyles.Secondary.Render("$ _"),
 	}
 
-	// Consistent styling with theme colors (no border - will be in preview card)
+	terminalContent := strings.Join(lines, "\n")
+
+	// Create bordered box WITHOUT Width constraint
+	// The Width constraint is what's breaking the alignment
 	terminalStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(theme.Colors.Primary)).
 		Background(lipgloss.Color(theme.Colors.Background)).
 		Foreground(lipgloss.Color(theme.Colors.Foreground)).
-		Padding(1).
-		Width(terminalWidth) // Responsive width
+		Padding(1)
 
 	return terminalStyle.Render(terminalContent)
 }
@@ -733,73 +718,83 @@ func (m *Themes) renderCodeDemoWithWidth(theme Theme, maxWidth int) string {
 	// Use reusable theme styles (idiomatic pattern)
 	themeStyles := m.getThemeStyles(theme)
 
-	codeContent := fmt.Sprintf("Editor\n%s {\n    %s\n    %s\n}",
-		themeStyles.Secondary.Render("func main()"),
-		themeStyles.Success.Render("fmt.Println(\"Hello!\")"),
-		themeStyles.Secondary.Render("return true"))
-
-	// Responsive width - fit within column
-	codeWidth := min(maxWidth, 30) // Max 30, but respect column width
-	if codeWidth < 15 {
-		codeWidth = 15 // Minimum readable width
+	// Build code lines
+	codeLines := []string{
+		"Code Editor",
+		"",
+		themeStyles.Warning.Render("// Apply theme to system"),
+		themeStyles.Secondary.Render("func applyTheme(name string) error {"),
+		"    " + themeStyles.Primary.Render("theme") + " := " + themeStyles.Success.Render("\"catppuccin\""),
+		"    " + themeStyles.Error.Render("return fmt.Errorf(\"not found\")"),
+		"    " + themeStyles.Secondary.Render("return nil"),
+		"}",
 	}
 
-	// Consistent styling with theme colors (no border - will be in preview card)
+	codeContent := strings.Join(codeLines, "\n")
+
+	// Create bordered box WITHOUT Width constraint
 	codeStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(theme.Colors.Secondary)).
 		Background(lipgloss.Color(theme.Colors.Background)).
 		Foreground(lipgloss.Color(theme.Colors.Foreground)).
-		Padding(1).
-		Width(codeWidth) // Responsive width
+		Padding(1)
 
 	return codeStyle.Render(codeContent)
 }
 
 // renderThemeDetailsWithWidth renders theme details with responsive width.
 func (m *Themes) renderThemeDetailsWithWidth(theme Theme, maxWidth int) string {
-	// Calculate available width for content (maxWidth is already content width)
-	availableWidth := maxWidth // No need to subtract padding again
+	// Use full available width
+	availableWidth := maxWidth - 4 // Account for padding
 	if availableWidth < 20 {
 		availableWidth = 20 // Minimum for readable content
 	}
 
-	// Truncate description to fit available width (use proper Unicode width)
-	description := theme.Description
-	if runewidth.StringWidth(description) > availableWidth-10 { // Leave space for bullet
-		description = runewidth.Truncate(description, availableWidth-13, "...")
+	// Build comprehensive theme details
+	var builder strings.Builder
+	builder.WriteString("Theme Information\n\n")
+
+	// Description
+	builder.WriteString("📝 Description:\n")
+	builder.WriteString(fmt.Sprintf("   %s\n\n", theme.Description))
+
+	// Applications in a nice list
+	builder.WriteString("📦 Supported Applications:\n")
+
+	for i, app := range theme.Applications {
+		if i < 4 { // Show first 4 apps
+			builder.WriteString(fmt.Sprintf("   • %s\n", app))
+		}
+	}
+	if len(theme.Applications) > 4 {
+		builder.WriteString(fmt.Sprintf("   • ... and %d more\n", len(theme.Applications)-4))
 	}
 
-	// Format applications list to fit width (use proper Unicode width)
-	apps := strings.Join(theme.Applications[:min(3, len(theme.Applications))], ", ")
-	if runewidth.StringWidth(apps) > availableWidth-8 { // Leave space for "Apps: "
-		apps = runewidth.Truncate(apps, availableWidth-11, "...")
-	} else if len(theme.Applications) > 3 {
-		apps += "..."
+	builder.WriteString("\n")
+
+	// Variants
+	builder.WriteString("🎨 Available Variants:\n")
+
+	variantList := strings.Join(theme.Variants, " | ")
+	builder.WriteString(fmt.Sprintf("   %s\n\n", variantList))
+
+	// Wallpaper/Style info
+	builder.WriteString("🖼️ Wallpaper Style:\n")
+	builder.WriteString(fmt.Sprintf("   %s\n", theme.Wallpaper))
+
+	// Current theme indicator
+	if theme.Current {
+		builder.WriteString("\n✅ This is your current theme")
 	}
 
-	// Create width-aware details content
-	details := fmt.Sprintf(`Theme Details:
-• %s
-• Apps: %s  
-• Variants: %s
-• Style: %s`,
-		description,
-		apps,
-		strings.Join(theme.Variants[:min(2, len(theme.Variants))], ", "),
-		runewidth.Truncate(theme.Wallpaper, availableWidth/2, "..."))
-
-	// Responsive width
-	detailsWidth := min(maxWidth, 30) // Max 30, but respect column width
-	if detailsWidth < 20 {
-		detailsWidth = 20 // Minimum readable width
-	}
-
-	// Apply simple styling (no border - will be in preview card)
+	// Create bordered box WITHOUT Width constraint
 	detailsStyle := lipgloss.NewStyle().
-		Padding(1).
-		Width(detailsWidth). // Responsive width
-		Render(details)
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(theme.Colors.Warning)).
+		Padding(1)
 
-	return detailsStyle
+	return detailsStyle.Render(builder.String())
 }
 
 // applyTheme applies the selected theme.
@@ -841,10 +836,16 @@ func (m *Themes) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Delegate unhandled keys to viewport (idiomatic pattern for scrolling support)
+	// Delegate unhandled keys to active viewport (idiomatic pattern for scrolling support)
 	var cmd tea.Cmd
 
-	m.viewport, cmd = m.viewport.Update(msg)
+	// Update the appropriate viewport based on focus
+	if m.showPreview {
+		// Could add logic to switch focus between viewports with Tab
+		m.listViewport, cmd = m.listViewport.Update(msg)
+	} else {
+		m.listViewport, cmd = m.listViewport.Update(msg)
+	}
 
 	return m, cmd
 }
@@ -901,58 +902,25 @@ func (m *Themes) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	}
 
 	if !m.ready {
-		// Initialize viewport with content area size
-		m.viewport = viewport.New(msg.Width, contentHeight)
+		// Initialize both viewports
+		// List viewport takes fixed width
+		m.listViewport = viewport.New(35, contentHeight)
+		// Preview viewport takes remaining width (accounting for space separator)
+		m.previewViewport = viewport.New(msg.Width-36, contentHeight)
 		m.ready = true
-		// Set initial content after viewport is ready
+		// Set initial content after viewports are ready
 		m.updateViewportContent()
 	} else {
-		// Update viewport size to content area
-		m.viewport.Width = msg.Width
-		m.viewport.Height = contentHeight
+		// Update viewport sizes
+		m.listViewport.Width = 35
+		m.listViewport.Height = contentHeight
+		m.previewViewport.Width = msg.Width - 36
+		m.previewViewport.Height = contentHeight
 		// Refresh content for new size
 		m.updateViewportContent()
 	}
 
 	return m, nil
-}
-
-// renderSplitView renders the split view following official split-editors pattern.
-func (m *Themes) renderSplitView() string {
-	if m.width <= 0 {
-		m.width = 80 // Fallback for initialization
-	}
-
-	// Check if terminal is too narrow for split view
-	if m.width < 40 {
-		// Terminal too narrow - fall back to single column
-		return m.renderThemesList()
-	}
-
-	// Following split-editors pattern: dynamic sizing with simple division
-	columnWidth := m.width / 2
-
-	// Create content with MaxWidth constraint (idiomatic Lipgloss pattern)
-	themesListContent := m.renderThemesForColumn(columnWidth)
-	previewContent := m.renderPreview(columnWidth)
-
-	// Create styled columns following official examples pattern
-	leftColumn := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.styles.Muted).
-		Padding(1).
-		MaxWidth(columnWidth). // Use MaxWidth instead of Width
-		Render(themesListContent)
-
-	rightColumn := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.styles.Muted).
-		Padding(1).
-		MaxWidth(columnWidth). // Use MaxWidth instead of Width
-		Render(previewContent)
-
-	// Pure Lipgloss composition following official pattern
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 }
 
 // renderAllThemes renders all themes for viewport (following apps screen pattern).
@@ -999,88 +967,6 @@ func (m *Themes) renderAllThemes() string {
 	return builder.String()
 }
 
-// renderThemesForColumn renders themes following official examples pattern.
-func (m *Themes) renderThemesForColumn(columnWidth int) string {
-	var builder strings.Builder
-
-	title := m.getColumnTitle(columnWidth)
-	builder.WriteString(m.styles.Title.Render(title))
-	builder.WriteString("\n\n")
-
-	// Render themes with width-aware truncation when needed
-	for themeIndex, theme := range m.themes {
-		themeEntry := m.renderSingleTheme(themeIndex, theme, columnWidth)
-		builder.WriteString(themeEntry)
-		builder.WriteString("\n")
-	}
-
-	return builder.String()
-}
-
-func (m *Themes) getColumnTitle(columnWidth int) string {
-	title := "Available Themes"
-	if columnWidth > 0 && runewidth.StringWidth(title) > columnWidth-6 { // Account for border+padding
-		title = "Themes"
-	}
-
-	return title
-}
-
-func (m *Themes) renderSingleTheme(themeIndex int, theme Theme, columnWidth int) string {
-	style, prefix := m.getThemeStyle(themeIndex)
-	themeName, currentIndicator := m.formatThemeName(theme, columnWidth, prefix)
-
-	line := prefix + themeName + currentIndicator
-
-	return style.Render(line)
-}
-
-func (m *Themes) getThemeStyle(themeIndex int) (lipgloss.Style, string) {
-	if themeIndex == m.cursor {
-		return m.styles.Selected, "❯ "
-	}
-
-	return m.styles.Unselected, "  "
-}
-
-func (m *Themes) formatThemeName(theme Theme, columnWidth int, prefix string) (string, string) {
-	themeName := theme.DisplayName
-
-	currentIndicator := ""
-	if theme.Current {
-		currentIndicator = " (current)"
-	}
-
-	// Apply width constraints if specified
-	if columnWidth > 0 {
-		themeName, currentIndicator = m.applyWidthConstraints(themeName, currentIndicator, columnWidth, prefix)
-	}
-
-	return themeName, currentIndicator
-}
-
-func (m *Themes) applyWidthConstraints(themeName, currentIndicator string, columnWidth int, prefix string) (string, string) {
-	// Account for border (2) + padding (2) + prefix width
-	availableWidth := columnWidth - 6 - runewidth.StringWidth(prefix)
-	if availableWidth < 10 {
-		availableWidth = 10 // Minimum readable width
-	}
-
-	// Truncate if needed using Unicode-safe operations
-	fullLine := themeName + currentIndicator
-	if runewidth.StringWidth(fullLine) > availableWidth {
-		if runewidth.StringWidth(themeName) > availableWidth-3 {
-			themeName = runewidth.Truncate(themeName, availableWidth-3, "...")
-		}
-		// Skip current indicator if no space
-		if runewidth.StringWidth(themeName)+runewidth.StringWidth(currentIndicator) > availableWidth {
-			currentIndicator = ""
-		}
-	}
-
-	return themeName, currentIndicator
-}
-
 // ensureSelectionVisible calculates exact line position of selection in rendered content.
 // Follows the same pattern as apps screen for proper viewport scrolling.
 func (m *Themes) ensureSelectionVisible() {
@@ -1091,9 +977,9 @@ func (m *Themes) ensureSelectionVisible() {
 	// Calculate EXACT line position of current selection in rendered content
 	selectionLine := m.calculateThemeSelectionLine()
 
-	// Get current viewport window
-	viewportTop := m.viewport.YOffset
-	viewportBottom := viewportTop + m.viewport.Height - 1
+	// Get current list viewport window
+	viewportTop := m.listViewport.YOffset
+	viewportBottom := viewportTop + m.listViewport.Height - 1
 
 	// Buffer zones - scroll when selection gets close to edges
 	topBuffer := 3    // Keep 3 lines above selection visible
@@ -1107,13 +993,13 @@ func (m *Themes) ensureSelectionVisible() {
 			newOffset = 0
 		}
 
-		m.viewport.SetYOffset(newOffset)
+		m.listViewport.SetYOffset(newOffset)
 	} else if selectionLine >= viewportBottom-bottomBuffer {
 		// Selection too close to bottom - scroll down to maintain buffer
-		newOffset := selectionLine - m.viewport.Height + bottomBuffer + 1
-		totalLines := m.viewport.TotalLineCount()
+		newOffset := selectionLine - m.listViewport.Height + bottomBuffer + 1
+		totalLines := m.listViewport.TotalLineCount()
 
-		maxOffset := totalLines - m.viewport.Height
+		maxOffset := totalLines - m.listViewport.Height
 		if maxOffset < 0 {
 			maxOffset = 0
 		}
@@ -1122,7 +1008,7 @@ func (m *Themes) ensureSelectionVisible() {
 			newOffset = maxOffset
 		}
 
-		m.viewport.SetYOffset(newOffset)
+		m.listViewport.SetYOffset(newOffset)
 	}
 	// Selection is comfortably visible - no scroll needed
 }
@@ -1142,14 +1028,4 @@ func (m *Themes) calculateThemeSelectionLine() int {
 	line++ // Current theme name line
 
 	return line
-}
-
-// renderThemesList renders the full width themes list using idiomatic Lipgloss.
-func (m *Themes) renderThemesList() string {
-	if !m.ready {
-		return "Loading themes..."
-	}
-
-	// Just return all themes content - main View() handles viewport setup
-	return m.renderAllThemes()
 }
