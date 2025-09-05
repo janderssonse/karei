@@ -11,18 +11,28 @@ Graphics corruption/glitches in the TUI theme selection screen showing misaligne
 
 ## Solutions Applied
 
-### 1. Simplified View Rendering
-- Removed double borders (viewport content already has borders)
-- Added simple space separator instead of complex styling
-- Let viewports handle their own borders
+### 1. Fixed Viewport Update Logic (CRITICAL)
+- **Both viewports must be updated on every Update() call** when both are visible
+- Previous code only updated one viewport at a time, causing render artifacts
+- Viewports must process ALL messages (not just keyboard events)
 
-### 2. Replaced Unicode Characters
+### 2. Proper Message Handling Order
+- Process WindowSizeMsg first (affects viewport dimensions)
+- Update viewports BEFORE handling keyboard input
+- Batch all commands properly using tea.Batch()
+
+### 3. Simplified View Rendering
+- Use lipgloss.Place() for consistent sizing
+- Removed double borders (viewport content already has borders)
+- Let Lipgloss handle layout instead of manual line-by-line processing
+
+### 4. Replaced Unicode Characters
 - Changed ✓ to [OK]
 - Changed ⚠ to [!]  
 - Changed ✗ to [X]
 - ASCII characters have predictable width
 
-### 3. Adjusted Width Calculations
+### 5. Adjusted Width Calculations
 - Account for space separator between columns (Width-36 instead of Width-37)
 - Removed Width() constraints on bordered boxes (let content flow naturally)
 

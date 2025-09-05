@@ -393,24 +393,41 @@ func (m *Themes) Init() tea.Cmd {
 
 // Update handles messages for the Themes model.
 func (m *Themes) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
-	// First handle our specific messages
+	// Handle window size first as it affects viewports
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		return m.handleKeyMsg(msg)
 	case tea.WindowSizeMsg:
 		return m.handleWindowSizeMsg(msg)
 	}
 
-	// Delegate to active viewport
-	if m.showPreview {
-		m.previewViewport, cmd = m.previewViewport.Update(msg)
-	} else {
-		m.listViewport, cmd = m.listViewport.Update(msg)
+	// Update viewports BEFORE handling keys - this ensures they process all messages
+	// Always update list viewport (it's always visible)
+	m.listViewport, cmd = m.listViewport.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 
-	return m, cmd
+	// Update preview viewport if visible
+	if m.showPreview && m.height >= 15 && m.ready {
+		m.previewViewport, cmd = m.previewViewport.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	// Now handle our keyboard input
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		model, cmd := m.handleKeyMsg(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return model, tea.Batch(cmds...)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 // View renders the themes screen following idiomatic Bubble Tea patterns.
@@ -425,18 +442,24 @@ func (m *Themes) View() string {
 
 	// Render split view with two viewports
 	if m.showPreview && m.height >= 15 {
-		// Simple approach: render viewports directly without additional borders
-		// The content inside viewports already has borders
-		leftColumn := m.listViewport.View()
-		rightColumn := m.previewViewport.View()
+		// Simple and clean - let Lipgloss handle the layout
+		left := m.listViewport.View()
+		right := m.previewViewport.View()
 
-		// Join with a small gap between columns
-		return lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			leftColumn,
-			" ", // Single space separator
-			rightColumn,
+		// Use Place to ensure consistent sizing
+		leftBox := lipgloss.Place(
+			35, m.height,
+			lipgloss.Left, lipgloss.Top,
+			left,
 		)
+
+		rightBox := lipgloss.Place(
+			m.width-36, m.height,
+			lipgloss.Left, lipgloss.Top,
+			right,
+		)
+
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 	}
 
 	// Single column view
@@ -467,6 +490,8 @@ func (m *Themes) updateViewportContent() {
 	if m.showPreview && m.height >= 15 {
 		previewContent := m.renderPreviewContent()
 		m.previewViewport.SetContent(previewContent)
+		// Reset preview viewport to top for clean rendering
+		m.previewViewport.GotoTop()
 	}
 }
 
@@ -836,18 +861,8 @@ func (m *Themes) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Delegate unhandled keys to active viewport (idiomatic pattern for scrolling support)
-	var cmd tea.Cmd
-
-	// Update the appropriate viewport based on focus
-	if m.showPreview {
-		// Could add logic to switch focus between viewports with Tab
-		m.listViewport, cmd = m.listViewport.Update(msg)
-	} else {
-		m.listViewport, cmd = m.listViewport.Update(msg)
-	}
-
-	return m, cmd
+	// Don't forward key messages to viewports here - they're already handled in Update()
+	return m, nil
 }
 
 // handleCursorMovement moves the cursor up or down.
