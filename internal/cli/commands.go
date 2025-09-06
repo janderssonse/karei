@@ -87,6 +87,7 @@ func (app *CLI) runSecurityTool(ctx context.Context, tool string) error {
 		if isServiceActive(ctx, "fail2ban") {
 			return commandRunner.ExecuteSudo(ctx, "fail2ban-client", "status")
 		}
+
 		return ErrFail2BanNotActive
 	case "clamav":
 		return commandRunner.Execute(ctx, "clamscan", "--version")
@@ -143,6 +144,7 @@ func (app *CLI) getVerifier(what string) (func(context.Context) error, bool) {
 	}
 
 	verifier, ok := verifiers[what]
+
 	return verifier, ok
 }
 
@@ -161,10 +163,12 @@ func (app *CLI) runAllVerifications(ctx context.Context) error {
 		if err := verify(ctx); err != nil {
 			return err
 		}
+
 		if !console.DefaultOutput.Plain {
 			fmt.Fprintf(os.Stderr, "\n")
 		}
 	}
+
 	return nil
 }
 
@@ -206,6 +210,7 @@ func (app *CLI) verifyTools(ctx context.Context) error {
 			if isInstalled {
 				status = statusInstalled
 			}
+
 			console.DefaultOutput.PlainStatus(tool, status)
 		} else {
 			if isInstalled {
@@ -237,6 +242,7 @@ func (app *CLI) verifyIntegrations(_ context.Context) error {
 			if exists {
 				status = statusFound
 			}
+
 			console.DefaultOutput.PlainStatus(name+"-config", status)
 		} else {
 			if exists {
@@ -263,6 +269,7 @@ func (app *CLI) verifyPath(_ context.Context) error {
 		if inPath {
 			status = statusFound
 		}
+
 		console.DefaultOutput.PlainStatus("user-bin-path", status)
 	} else {
 		if inPath {
@@ -291,6 +298,7 @@ func (app *CLI) verifyFish(_ context.Context) error {
 		if configExists {
 			status = statusFound
 		}
+
 		console.DefaultOutput.PlainStatus("fish-config", status)
 	} else {
 		if configExists {
@@ -329,6 +337,7 @@ func (app *CLI) reportXDGDirectory(name, dir string, exists bool) {
 		} else {
 			console.DefaultOutput.PlainStatus(keyName, statusMissing)
 		}
+
 		return
 	}
 
@@ -370,6 +379,7 @@ func (app *CLI) reportToolVersion(name, output string, err error) {
 		} else {
 			console.DefaultOutput.Result(fmt.Sprintf("✗ %s: version check failed", name))
 		}
+
 		return
 	}
 
@@ -422,12 +432,15 @@ func (app *CLI) showLogs(ctx context.Context, logType string) error {
 			{"precheck.log", "Precheck"},
 			{"errors.log", "Errors"},
 		}
+
 		for _, lt := range logTypes {
 			if err := showLogFile(ctx, filepath.Join(logDir, lt.file), lt.name); err != nil {
 				return err
 			}
+
 			fmt.Println()
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("unknown log type: %s", logType)
@@ -440,16 +453,19 @@ func showLogFile(ctx context.Context, path, name string) error {
 
 	if !system.FileExists(path) {
 		fmt.Printf("No %s logs found\n", strings.ToLower(name))
+
 		return nil
 	}
 
 	commandRunner := platform.NewCommandRunner(false, false)
+
 	output, err := commandRunner.ExecuteWithOutput(ctx, "tail", "-n", "20", path)
 	if err != nil {
 		return fmt.Errorf("failed to read log file: %w", err)
 	}
 
 	fmt.Println(output)
+
 	return nil
 }
 
@@ -458,6 +474,7 @@ func showLogFile(ctx context.Context, path, name string) error {
 // commandExists checks if a command is available in PATH.
 func commandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
+
 	return err == nil
 }
 
@@ -465,5 +482,6 @@ func commandExists(cmd string) bool {
 func isServiceActive(ctx context.Context, service string) bool {
 	commandRunner := platform.NewCommandRunner(false, false)
 	err := commandRunner.Execute(ctx, "systemctl", "is-active", "--quiet", service)
+
 	return err == nil
 }

@@ -75,6 +75,7 @@ func TestConsentConstants(t *testing.T) {
 func TestAutoYesFlag(t *testing.T) {
 	// Save original value
 	original := AutoYes
+
 	defer func() { AutoYes = original }()
 
 	// Test setting the flag

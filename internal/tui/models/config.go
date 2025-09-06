@@ -255,6 +255,15 @@ func (m *Config) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg processes keyboard input messages.
 
+// GetNavigationHints returns screen-specific navigation hints for the footer.
+func (m *Config) GetNavigationHints() []string {
+	return []string{
+		"[←/→] Switch Tabs",
+		"[Enter] Edit Section",
+		"[s] Save Config",
+	}
+}
+
 // View renders the config screen.
 func (m *Config) View() string {
 	if m.quitting {
@@ -281,11 +290,6 @@ func (m *Config) View() string {
 	// Current section content
 	content := m.renderSection(m.sections[m.currentTab])
 	builder.WriteString(content)
-	builder.WriteString("\n\n")
-
-	// Footer
-	footer := m.renderFooter()
-	builder.WriteString(footer)
 
 	return builder.String()
 }
@@ -340,12 +344,10 @@ func (m *Config) renderSection(section ConfigSection) string {
 
 	// Calculate available space dynamically
 	header := m.renderHeader()
-	footer := m.renderFooter()
 	tabs := m.renderTabs()
 
-	// Section container with dynamic sizing
 	availableWidth := m.width
-	availableHeight := m.height - lipgloss.Height(header) - lipgloss.Height(footer) - lipgloss.Height(tabs)
+	availableHeight := m.height - lipgloss.Height(header) - lipgloss.Height(tabs)
 
 	sectionStyle := m.styles.Card.
 		Width(availableWidth).
@@ -423,19 +425,6 @@ func (m *Config) renderField(field ConfigField) string {
 }
 
 // renderFooter creates the footer with keybindings.
-func (m *Config) renderFooter() string {
-	var keybindings []string
-
-	keybindings = append(keybindings, m.styles.Keybinding("←→", "switch tabs"))
-	keybindings = append(keybindings, m.styles.Keybinding("enter", "edit section"))
-	keybindings = append(keybindings, m.styles.Keybinding("s", "save config"))
-	keybindings = append(keybindings, m.styles.Keybinding("esc", "back"))
-	keybindings = append(keybindings, m.styles.Keybinding("q", "quit"))
-
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
-}
 
 // startForm creates and starts a form for the current section.
 func (m *Config) startForm() tea.Cmd {

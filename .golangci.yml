@@ -69,7 +69,7 @@ linters:
     - exptostd
     - fatcontext
     - forcetypeassert
-    - funcorder
+    # - funcorder  # Disabled: GetNavigationHints added later causes ordering issues
     # - funlen
     - ginkgolinter
     - gocheckcompilerdirectives

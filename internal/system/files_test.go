@@ -16,7 +16,9 @@ func TestFileExists(t *testing.T) {
 	// Create a temp file
 	tmpFile, err := os.CreateTemp(t.TempDir(), "test")
 	require.NoError(t, err)
+
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
 	_ = tmpFile.Close()
 
 	tests := []struct {
@@ -51,7 +53,9 @@ func TestIsDir(t *testing.T) {
 	// Create a temp file
 	tmpFile, err := os.CreateTemp(t.TempDir(), "testfile")
 	require.NoError(t, err)
+
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
 	_ = tmpFile.Close()
 
 	tests := []struct {

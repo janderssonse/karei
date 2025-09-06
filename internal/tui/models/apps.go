@@ -120,6 +120,9 @@ type AppsModel struct {
 	categories []category
 	selected   map[string]SelectionState
 
+	// Fast lookup map for O(1) app access
+	appLookup map[string]*app // Key -> app pointer for fast updates
+
 	// Navigation state
 	currentCat int
 
@@ -127,6 +130,11 @@ type AppsModel struct {
 	viewport viewport.Model
 
 	ready bool
+
+	// Batch status update tracking
+	statusUpdatePending bool      // True when status updates are accumulating
+	lastViewportUpdate  time.Time // Track last viewport update to throttle
+	contentNeedsUpdate  bool      // True when viewport content needs re-rendering
 
 	// Apps manager for status checking
 	appsManager *apps.Manager
@@ -173,6 +181,12 @@ type StatusUpdateMsg struct {
 // RefreshStatusMsg triggers a refresh of all app installation statuses.
 type RefreshStatusMsg struct{}
 
+// ViewportRefreshMsg triggers a viewport content refresh.
+type ViewportRefreshMsg struct{}
+
+// StartStatusCheckMsg triggers the initial status checking after UI is ready.
+type StartStatusCheckMsg struct{}
+
 // SearchUpdateMsg is now defined in navigation.go
 
 // FilterUpdateMsg carries filter and sort state updates.
@@ -213,12 +227,13 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 
 	selected := make(map[string]SelectionState)
 	categories := make([]category, 0, len(appCategories))
+	appLookup := make(map[string]*app) // Fast lookup map
 
 	// Convert external categories to internal format
-	for _, cat := range appCategories {
+	for catIdx, cat := range appCategories {
 		apps := make([]app, 0, len(cat.Applications))
 		for _, application := range cat.Applications {
-			apps = append(apps, app{
+			newApp := app{
 				Key:           application.Key,
 				Name:          application.Name,
 				Description:   application.Description,
@@ -226,7 +241,8 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 				Installed:     application.Installed,
 				Selected:      false,
 				StatusPending: true, // Start with pending status, will be updated async
-			})
+			}
+			apps = append(apps, newApp)
 		}
 
 		categories = append(categories, category{
@@ -235,18 +251,26 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 			selected:   selected,
 			currentApp: 0,
 		})
+
+		// Now store pointers to the actual apps in the categories
+		for appIdx := range categories[catIdx].apps {
+			appLookup[categories[catIdx].apps[appIdx].Key] = &categories[catIdx].apps[appIdx]
+		}
 	}
 
 	model := &AppsModel{
-		styles:      styleConfig,
-		width:       width,
-		height:      height,
-		ctx:         ctx, // Store parent context
-		categories:  categories,
-		selected:    selected,
-		appsManager: apps.NewTUIManager(false), // Use TUI-optimized manager to suppress command output
-		keyMap:      DefaultAppsKeyMap(),
-		viewport:    viewport.New(width, height),
+		styles:             styleConfig,
+		width:              width,
+		height:             height,
+		ctx:                ctx, // Store parent context
+		categories:         categories,
+		selected:           selected,
+		appLookup:          appLookup,                 // Fast lookup map
+		appsManager:        apps.NewTUIManager(false), // Use TUI-optimized manager to suppress command output
+		keyMap:             DefaultAppsKeyMap(),
+		viewport:           viewport.New(width, height),
+		lastViewportUpdate: time.Now(),
+		contentNeedsUpdate: true, // Initial render needed
 
 		// Initialize filter and sort states
 		installStatusFilter: "All",
@@ -302,9 +326,25 @@ func DefaultAppsKeyMap() AppsKeyMap {
 // NewStatusCheckCommand creates a command to check a single app's installation status.
 func NewStatusCheckCommand(parentCtx context.Context, appName string, manager *apps.Manager) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
+		// Generous timeouts - since it's async, it won't block UI
+		timeout := 5 * time.Second // Default generous timeout
+
+		// Get app to determine timeout based on method
+		if app, exists := apps.Apps[appName]; exists {
+			switch app.Method {
+			case domain.MethodBinary, domain.MethodMise, domain.MethodAqua:
+				timeout = 2 * time.Second // Binary checks should be fast
+			case domain.MethodAPT, domain.MethodDEB:
+				timeout = 3 * time.Second // APT needs time for dpkg
+			case domain.MethodFlatpak, domain.MethodSnap:
+				timeout = 5 * time.Second // These can be slow
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(parentCtx, timeout)
 		defer cancel()
 
+		// This runs in its own goroutine via Bubble Tea, won't block UI
 		installed := manager.IsAppInstalled(ctx, appName)
 
 		return StatusUpdateMsg{
@@ -314,18 +354,69 @@ func NewStatusCheckCommand(parentCtx context.Context, appName string, manager *a
 	}
 }
 
-// Init initializes the apps model.
-func (m *AppsModel) Init() tea.Cmd {
-	// Start async status checking for all apps
-	var cmds []tea.Cmd
+// BatchStatusCheckMsg triggers the next batch of status checks.
+type BatchStatusCheckMsg struct {
+	BatchIndex int
+}
 
-	for _, cat := range m.categories {
-		for _, app := range cat.apps {
-			cmds = append(cmds, NewStatusCheckCommand(m.ctx, app.Key, m.appsManager))
+// startBatchedStatusCheck initiates batched status checking to avoid system overload.
+func (m *AppsModel) startBatchedStatusCheck() tea.Cmd {
+	// Start with visible apps for immediate feedback
+	return m.checkVisibleAppsFirst()
+}
+
+// checkVisibleAppsFirst checks currently visible apps before others.
+func (m *AppsModel) checkVisibleAppsFirst() tea.Cmd {
+	// Don't check anything immediately - just schedule the first small batch
+	// This prevents blocking the UI on startup
+	return func() tea.Msg {
+		// Small delay to let UI initialize first
+		time.Sleep(50 * time.Millisecond)
+		return BatchStatusCheckMsg{BatchIndex: 0}
+	}
+}
+
+// checkCategoryApps checks ONE app at a time to keep UI 100% responsive.
+func (m *AppsModel) checkCategoryApps(_, batchIndex int) tea.Cmd {
+	// Only check ONE app at a time
+	// This is key: Bubble Tea runs commands in separate goroutines,
+	// so even if the check takes 5 seconds, it won't block the UI
+	var appToCheck string
+
+	found := false
+
+	// Find next unchecked app
+	for catIdx := 0; catIdx < len(m.categories) && !found; catIdx++ {
+		cat := m.categories[catIdx]
+		for _, a := range cat.apps {
+			if a.StatusPending {
+				appToCheck = a.Key
+				found = true
+
+				break
+			}
 		}
 	}
 
-	return tea.Batch(cmds...)
+	if !found {
+		return nil // All apps checked
+	}
+
+	// Check just ONE app, then immediately schedule next
+	// The status check runs in a goroutine and won't block
+	return tea.Sequence(
+		NewStatusCheckCommand(m.ctx, appToCheck, m.appsManager),
+		func() tea.Msg {
+			// Immediately queue next check - the previous one is still running async
+			return BatchStatusCheckMsg{BatchIndex: batchIndex + 1}
+		},
+	)
+}
+
+// Init initializes the apps model.
+func (m *AppsModel) Init() tea.Cmd {
+	// Don't start status checking immediately - let UI initialize first
+	return nil
 }
 
 // Update handles messages and returns updated model and commands.
@@ -335,34 +426,22 @@ func (m *AppsModel) Init() tea.Cmd {
 func (m *AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		// Calculate viewport height accounting for our own header
-		headerHeight := lipgloss.Height(m.renderSearchHeader())
-		viewportHeight := msg.Height - headerHeight
-
-		if !m.ready {
-			// Initialize viewport with proper size (reserving space for header)
-			m.viewport = viewport.New(msg.Width, viewportHeight)
-			m.viewport.SetContent(m.renderAllCategories())
-			m.ready = true
-		} else {
-			// Update viewport size (reserving space for header)
-			m.viewport.Width = msg.Width
-			m.viewport.Height = viewportHeight
-		}
-
-		return m, nil
+		return m.handleWindowResize(msg)
 
 	case StatusUpdateMsg:
-		m.updateAppStatus(msg.AppName, msg.Installed)
+		return m.handleStatusUpdate(msg)
 
-		return m, nil
+	case StartStatusCheckMsg:
+		// Start checking apps now that UI is ready
+		return m, m.checkCategoryApps(0, 0)
+
+	case BatchStatusCheckMsg:
+		// Continue checking the next batch of apps
+		return m, m.checkCategoryApps(m.currentCat, msg.BatchIndex)
 
 	case RefreshStatusMsg:
-		// Refresh all app statuses
-		return m, m.refreshAllAppStatuses()
+		// Refresh all app statuses using batched approach
+		return m, m.startBatchedStatusCheck()
 
 	case CompletedOperationsMsg:
 		// Handle immediate status updates from completed operations
@@ -371,27 +450,82 @@ func (m *AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SearchUpdateMsg:
-		// Handle search query updates and sync search active state
-		m.searchActive = msg.Active
-		m.updateSearchQuery(msg.Query)
-
-		return m, nil
-
+		return m.handleSearchUpdate(msg)
 	case FilterUpdateMsg:
-		// Handle filter and sort state updates
-		m.installStatusFilter = msg.InstallStatus
-		m.packageTypeFilter = msg.PackageType
-		m.sortOption = msg.SortOption
-
-		// Re-apply search and filters to update display
-		if m.searchActive {
-			m.updateSearchQuery(m.searchQuery)
-		}
-
-		return m, nil
+		return m.handleFilterUpdate(msg)
 
 	case tea.KeyMsg:
 		return m.handleKeyMessage(msg)
+	}
+
+	return m, nil
+}
+
+// handleStatusUpdate handles status update messages.
+func (m *AppsModel) handleStatusUpdate(msg StatusUpdateMsg) (tea.Model, tea.Cmd) {
+	m.updateAppStatus(msg.AppName, msg.Installed)
+
+	// Throttle content updates during batch status checking
+	if time.Since(m.lastViewportUpdate) > 100*time.Millisecond {
+		m.contentNeedsUpdate = true // Just mark for update, don't render here
+		m.lastViewportUpdate = time.Now()
+		m.statusUpdatePending = false
+	}
+
+	return m, nil
+}
+
+// handleSearchUpdate handles search update messages.
+func (m *AppsModel) handleSearchUpdate(msg SearchUpdateMsg) (tea.Model, tea.Cmd) {
+	m.searchActive = msg.Active
+	m.updateSearchQuery(msg.Query)
+
+	return m, nil
+}
+
+// handleFilterUpdate handles filter update messages.
+func (m *AppsModel) handleFilterUpdate(msg FilterUpdateMsg) (tea.Model, tea.Cmd) {
+	m.installStatusFilter = msg.InstallStatus
+	m.packageTypeFilter = msg.PackageType
+	m.sortOption = msg.SortOption
+
+	// Re-apply search and filters to update display
+	if m.searchActive {
+		m.updateSearchQuery(m.searchQuery)
+	}
+
+	return m, nil
+}
+
+// handleWindowResize handles window resize messages.
+func (m *AppsModel) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+
+	searchHeader := m.renderSearchHeader()
+	headerComponents := []string{}
+
+	if searchHeader != "" {
+		headerComponents = append(headerComponents, searchHeader)
+	}
+
+	totalHeaderHeight := 0
+
+	if len(headerComponents) > 0 {
+		composed := lipgloss.JoinVertical(lipgloss.Left, headerComponents...)
+		totalHeaderHeight = lipgloss.Height(composed)
+	}
+
+	viewportHeight := max(msg.Height-totalHeaderHeight, 1)
+
+	if !m.ready {
+		m.viewport = viewport.New(msg.Width, viewportHeight)
+		m.contentNeedsUpdate = true
+		m.ready = true
+
+		return m, tea.Tick(time.Millisecond*200, func(_ time.Time) tea.Msg {
+			return StartStatusCheckMsg{}
+		})
 	}
 
 	return m, nil
@@ -407,7 +541,7 @@ func (m *AppsModel) View() string {
 		return "Loading..."
 	}
 
-	// Build the complete view: header + content
+	// Build the complete view: header + content + footer
 	components := []string{}
 
 	// Always show the search/filter header (as per TUI design)
@@ -416,8 +550,11 @@ func (m *AppsModel) View() string {
 		components = append(components, searchHeader)
 	}
 
-	// Update viewport content with current state
-	m.viewport.SetContent(m.renderAllCategories())
+	// Only update viewport content when actually needed
+	if m.contentNeedsUpdate {
+		m.viewport.SetContent(m.renderAllCategories())
+		m.contentNeedsUpdate = false
+	}
 
 	// Add main content
 	components = append(components, m.viewport.View())
@@ -555,19 +692,11 @@ func (m *AppsModel) renderAllCategories() string {
 
 // renderCategory renders a single category.
 func (m *AppsModel) renderCategory(cat category, isCurrent bool) string {
-	installCount, uninstallCount := m.calculateSelectionStats(cat)
 	maxNameWidth, maxDescWidth := m.calculateColumnWidths(cat.apps)
 	appLines := m.renderAppLines(cat, isCurrent, maxNameWidth, maxDescWidth)
 
-	// Create category title with decorative border style and selection summary
-	var selectionSummary string
-	if installCount > 0 || uninstallCount > 0 {
-		selectionSummary = fmt.Sprintf(" [+%d/-%d of %d]", installCount, uninstallCount, len(cat.apps))
-	} else {
-		selectionSummary = fmt.Sprintf(" [%d total]", len(cat.apps))
-	}
-
-	categoryTitle := fmt.Sprintf("── %s%s ──", cat.name, selectionSummary)
+	// Create simplified category title
+	categoryTitle := fmt.Sprintf("%s (%d)", cat.name, len(cat.apps))
 
 	// Style the title
 	styledTitle := lipgloss.NewStyle().
@@ -715,6 +844,9 @@ func (m *AppsModel) toggleInstallSelection() {
 	case StateUninstall:
 		m.selected[app.Key] = StateInstall // Switch from uninstall to install
 	}
+
+	// Mark content for re-render
+	m.contentNeedsUpdate = true
 }
 
 func (m *AppsModel) markForUninstall() {
@@ -729,6 +861,9 @@ func (m *AppsModel) markForUninstall() {
 
 	app := cat.apps[cat.currentApp]
 	m.selected[app.Key] = StateUninstall
+
+	// Mark content for re-render
+	m.contentNeedsUpdate = true
 }
 
 // toggleInstallSelectionForSearchResult toggles selection for the currently selected search result.
@@ -757,6 +892,9 @@ func (m *AppsModel) toggleInstallSelectionForSearchResult() {
 	case StateUninstall:
 		m.selected[app.Key] = StateInstall // Switch from uninstall to install
 	}
+
+	// Mark content for re-render
+	m.contentNeedsUpdate = true
 }
 
 // markForUninstallForSearchResult marks the currently selected search result for uninstallation.
@@ -767,6 +905,9 @@ func (m *AppsModel) markForUninstallForSearchResult() {
 
 	app := m.filteredApps[m.searchSelection]
 	m.selected[app.Key] = StateUninstall
+
+	// Mark content for re-render
+	m.contentNeedsUpdate = true
 }
 
 // handleInstallationKeys processes installation-related key presses.
@@ -872,6 +1013,8 @@ func (m *AppsModel) updateSearchResults() {
 	}
 }
 
+// renderNavigationHeader renders the top navigation bar that mirrors the footer.
+
 // renderSearchHeader renders the always-visible search/filter header bar.
 func (m *AppsModel) renderSearchHeader() string {
 	// Title line
@@ -966,6 +1109,7 @@ func (m *AppsModel) handleUpFromCategories() tea.Cmd {
 		m.currentCat--
 		m.categories[m.currentCat].currentApp = 0
 		m.ensureSelectionVisible()
+		m.contentNeedsUpdate = true // Mark for re-render
 
 		return func() tea.Msg {
 			return ContextSwitchMsg{Direction: "up", Context: "categories"}
@@ -1015,6 +1159,7 @@ func (m *AppsModel) handleDownFromCategories() tea.Cmd {
 		m.currentCat++
 		m.categories[m.currentCat].currentApp = 0
 		m.ensureSelectionVisible()
+		m.contentNeedsUpdate = true // Mark for re-render
 	}
 
 	return func() tea.Msg {
@@ -1028,8 +1173,10 @@ func (m *AppsModel) handleNavigationKeys(msg tea.KeyMsg) {
 	switch {
 	case key.Matches(msg, m.keyMap.Down), msg.String() == "j":
 		m.handleDownNavigation()
+		// Don't re-render everything! The View() method will handle it
 	case key.Matches(msg, m.keyMap.Up), msg.String() == "k":
 		m.handleUpNavigation()
+		// Don't re-render everything! The View() method will handle it
 	case key.Matches(msg, m.keyMap.PageDown), msg.String() == "J":
 		// Scroll viewport down (J key for page navigation)
 		m.viewport.ScrollDown(5)
@@ -1043,20 +1190,24 @@ func (m *AppsModel) handleDownNavigation() {
 	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
 		// Navigate down in search results
 		m.navigateSearchDown()
-	} else if !m.searchActive || !m.searchHasFocus {
-		// Navigate down in regular categories
+	} else if !m.searchActive {
+		// Navigate down in regular categories (removed redundant check)
 		m.navigateDown()
 	}
+
+	m.contentNeedsUpdate = true // Mark for re-render
 }
 
 func (m *AppsModel) handleUpNavigation() {
 	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
 		// Navigate up in search results
 		m.navigateSearchUp()
-	} else if !m.searchActive || !m.searchHasFocus {
-		// Navigate up in regular categories
+	} else if !m.searchActive {
+		// Navigate up in regular categories (removed redundant check)
 		m.navigateUp()
 	}
+
+	m.contentNeedsUpdate = true // Mark for re-render
 }
 
 // handleSelectionKeys processes selection key presses.
@@ -1077,48 +1228,22 @@ func (m *AppsModel) handleSelectionKeys(msg tea.KeyMsg) {
 	}
 }
 
-// updateAppStatus updates app installation status and clears selection state after operations.
+// updateAppStatus updates app installation status using O(1) lookup.
 func (m *AppsModel) updateAppStatus(appName string, installed bool) {
-	// Clear selection state after any status update
-	for i := range m.categories {
-		for j := range m.categories[i].apps {
-			if m.categories[i].apps[j].Key == appName {
-				m.categories[i].apps[j].Installed = installed
-				m.categories[i].apps[j].StatusPending = false // Status check completed
+	// Fast O(1) lookup instead of O(n²) search
+	if app, exists := m.appLookup[appName]; exists {
+		app.Installed = installed
+		app.StatusPending = false // Status check completed
 
-				// Clear selection state after any status update
-				// This ensures apps show their current status (● installed, ○ not installed)
-				// instead of the intended operation (✓ install, ✗ uninstall)
-				delete(m.selected, appName)
+		// Clear selection state after any status update
+		delete(m.selected, appName)
 
-				return
-			}
-		}
+		// Mark that we have pending status updates
+		m.statusUpdatePending = true
 	}
 }
 
-// refreshAllAppStatuses creates commands to refresh all app installation statuses.
-func (m *AppsModel) refreshAllAppStatuses() tea.Cmd {
-	var cmds []tea.Cmd
-
-	// Mark all apps as pending before starting checks
-	for i := range m.categories {
-		for j := range m.categories[i].apps {
-			m.categories[i].apps[j].StatusPending = true
-		}
-	}
-
-	for _, cat := range m.categories {
-		for _, app := range cat.apps {
-			cmds = append(cmds, NewStatusCheckCommand(m.ctx, app.Key, m.appsManager))
-		}
-	}
-
-	return tea.Batch(cmds...)
-}
-
-// ensureSelectionVisible calculates exact line position of selection in rendered content.
-// Accounts for category headers, borders, padding, and spacing.
+// ensureSelectionVisible ensures the currently selected app is visible in the viewport.
 func (m *AppsModel) ensureSelectionVisible() {
 	if !m.ready || len(m.categories) == 0 {
 		return
@@ -1447,21 +1572,17 @@ func (a *appCatalogAdapter) formatSource(method domain.InstallMethod) string {
 	return "unknown"
 }
 
-// calculateSelectionStats counts install and uninstall selections in a category.
-func (m *AppsModel) calculateSelectionStats(cat category) (int, int) {
-	installCount := 0
-	uninstallCount := 0
-
-	for _, app := range cat.apps {
-		switch m.selected[app.Key] {
-		case StateInstall:
-			installCount++
-		case StateUninstall:
-			uninstallCount++
-		}
+// truncate truncates a string to maxLen characters, adding "..." if needed.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
 	}
 
-	return installCount, uninstallCount
+	if maxLen <= 3 {
+		return "..."
+	}
+
+	return s[:maxLen-3] + "..."
 }
 
 // calculateColumnWidths determines the maximum width for name and description columns.
@@ -1486,17 +1607,23 @@ func (m *AppsModel) calculateColumnWidths(apps []app) (int, int) {
 }
 
 // renderAppLines creates formatted lines for all apps in a category.
-func (m *AppsModel) renderAppLines(cat category, isCurrent bool, maxNameWidth, maxDescWidth int) []string {
+func (m *AppsModel) renderAppLines(cat category, isCurrent bool, _, _ int) []string {
 	appLines := make([]string, 0, len(cat.apps))
+
+	// Define fixed column widths for better alignment
+	const (
+		nameWidth = 20
+		descWidth = 40
+	)
 
 	for appIdx, app := range cat.apps {
 		indicator := m.getAppIndicator(app, m.selected[app.Key])
 
-		// Format with aligned columns: [indicator] [name] [description] [source]
-		line := fmt.Sprintf("%s %-*s  %-*s  %s",
+		// Format with fixed-width columns and truncation
+		line := fmt.Sprintf("%s %-20s  %-40s  [%s]",
 			indicator,
-			maxNameWidth, app.Name,
-			maxDescWidth, app.Description,
+			truncate(app.Name, nameWidth),
+			truncate(app.Description, descWidth),
 			app.Source)
 
 		// Highlight current app in current category
@@ -1636,6 +1763,36 @@ func (m *AppsModel) handleCompletedOperations(operations []SelectedOperation) {
 // Cleanup closes the debug logger when the model is done.
 func (m *AppsModel) Cleanup() {
 	// No cleanup needed currently
+}
+
+// GetNavigationHints returns screen-specific navigation hints for the footer.
+func (m *AppsModel) GetNavigationHints() []string {
+	// Screen-specific controls
+	if m.searchActive {
+		if m.searchHasFocus {
+			// Search field has focus
+			return []string{
+				"Type to Search",
+				"[Enter] Done",
+				"[{/}] Results",
+			}
+		}
+		// Search results have focus
+		return []string{
+			"[j/k] Navigate",
+			"[Space] Select",
+			"[{/}] Search Field",
+		}
+	}
+	// Normal mode - app-specific actions
+	return []string{
+		"[j/k] Navigate",
+		"[{/}] Categories",
+		"[Space] Select",
+		"[d] Uninstall",
+		"[Enter] Install",
+		"[/] Search",
+	}
 }
 
 // updateSearchQuery updates the search query and filters apps accordingly.

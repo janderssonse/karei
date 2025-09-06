@@ -678,6 +678,7 @@ func (app *CLI) runThemeApply(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	console.DefaultOutput.Successf("Theme '%s' applied successfully", themeName)
+
 	return nil
 }
 
@@ -687,6 +688,7 @@ func (app *CLI) runThemeList(_ context.Context, _ *cli.Command) error {
 	themes := []string{"tokyo-night", "catppuccin", "nord", "everforest", "gruvbox", "kanagawa", "rose-pine", "gruvbox-light"}
 
 	console.DefaultOutput.Result("Available themes:")
+
 	for _, theme := range themes {
 		console.DefaultOutput.Result("  • " + theme)
 	}
@@ -779,6 +781,7 @@ func (app *CLI) runFontInstall(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	console.DefaultOutput.Successf("Font '%s' installed successfully", fontName)
+
 	return nil
 }
 
@@ -788,6 +791,7 @@ func (app *CLI) runFontList(_ context.Context, _ *cli.Command) error {
 	fonts := []string{"CaskaydiaMono", "FiraMono", "JetBrainsMono", "MesloLGS", "BerkeleyMono"}
 
 	console.DefaultOutput.Result("Available fonts:")
+
 	for _, font := range fonts {
 		console.DefaultOutput.Result("  • " + font)
 	}

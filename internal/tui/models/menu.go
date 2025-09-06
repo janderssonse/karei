@@ -47,39 +47,39 @@ type Menu struct {
 func NewMenu(styleConfig *styles.Styles) *Menu {
 	items := []MenuItem{
 		{
-			Title:       "Install Applications",
-			Description: "Browse and install development tools and applications",
-			Icon:        "🔧",
+			Title:       "Applications",
+			Description: "Browse and install development tools",
+			Icon:        "📦",
 			Action:      "install",
 		},
 		{
-			Title:       "Configure Themes",
-			Description: "Apply coordinated themes across your system",
+			Title:       "Themes",
+			Description: "Apply beautiful coordinated themes",
 			Icon:        "🎨",
 			Action:      "theme",
 		},
 		{
-			Title:       "System Settings",
-			Description: "Configure fonts, shell, and system preferences",
+			Title:       "Settings",
+			Description: "Configure fonts, shell, and preferences",
 			Icon:        "⚙️",
 			Action:      "config",
 		},
 		{
-			Title:       "View Status",
-			Description: "Check installation status and system health",
+			Title:       "Status",
+			Description: "Check installation and system health",
 			Icon:        "📊",
 			Action:      "status",
 		},
 		{
-			Title:       "Update System",
-			Description: "Update applications and system components",
+			Title:       "Update",
+			Description: "Keep your tools up to date",
 			Icon:        "🔄",
 			Action:      "update",
 		},
 		{
-			Title:       "Help & Documentation",
-			Description: "View help, documentation, and usage examples",
-			Icon:        "❓",
+			Title:       "Documentation",
+			Description: "Help and usage guides",
+			Icon:        "📚",
 			Action:      "help",
 		},
 	}
@@ -223,8 +223,8 @@ func (m *Menu) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Menu) renderMenu() string {
 	var builder strings.Builder
 
-	// Menu container
-	builder.WriteString(m.styles.Title.Render("What would you like to do?"))
+	// Menu container with a more engaging prompt
+	builder.WriteString(m.styles.Title.Render("Build your perfect development foundation"))
 	builder.WriteString("\n\n")
 
 	for itemIndex, item := range m.items {

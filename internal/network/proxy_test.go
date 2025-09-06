@@ -105,6 +105,7 @@ func TestGetProxyEnv(t *testing.T) {
 			result := GetProxyEnv()
 
 			assert.Len(t, result, tt.expectedLen)
+
 			for _, expected := range tt.contains {
 				assert.Contains(t, result, expected)
 			}
@@ -194,6 +195,7 @@ func TestConfigureAPTProxy(t *testing.T) {
 				assert.Nil(t, result)
 			} else {
 				assert.Len(t, result, tt.expectedLen)
+
 				for _, expected := range tt.contains {
 					assert.Contains(t, result, expected)
 				}

@@ -23,15 +23,16 @@ type HelpSection struct {
 
 // Help represents the help screen model.
 type Help struct {
-	styles         *styles.Styles
-	width          int
-	height         int
-	sections       []HelpSection
-	viewport       viewport.Model
-	renderer       *glamour.TermRenderer
-	currentSection int
-	quitting       bool
-	keyMap         HelpKeyMap
+	styles          *styles.Styles
+	width           int
+	height          int
+	sections        []HelpSection
+	viewport        viewport.Model
+	renderer        *glamour.TermRenderer
+	currentSection  int
+	quitting        bool
+	keyMap          HelpKeyMap
+	renderedContent []string // Pre-rendered content cache
 }
 
 // HelpKeyMap defines key bindings for the help screen.
@@ -630,16 +631,30 @@ fi
 		Padding(1)
 
 	helpModel := &Help{
-		styles:         styleConfig,
-		sections:       sections,
-		viewport:       viewPort,
-		renderer:       renderer,
-		currentSection: 0,
-		keyMap:         DefaultHelpKeyMap(),
+		styles:          styleConfig,
+		sections:        sections,
+		viewport:        viewPort,
+		renderer:        renderer,
+		currentSection:  0,
+		keyMap:          DefaultHelpKeyMap(),
+		renderedContent: make([]string, len(sections)),
 	}
 
-	// Render initial content
-	helpModel.updateContent()
+	// Pre-render all sections for instant switching
+	for i, section := range sections {
+		rendered, err := renderer.Render(section.Content)
+		if err != nil {
+			// Fallback to plain text if rendering fails
+			rendered = section.Content
+		}
+
+		helpModel.renderedContent[i] = rendered
+	}
+
+	// Set initial content from cache
+	if len(helpModel.renderedContent) > 0 {
+		helpModel.viewport.SetContent(helpModel.renderedContent[0])
+	}
 
 	return helpModel
 }
@@ -670,26 +685,33 @@ func (m *Help) View() string {
 		return GoodbyeMessage
 	}
 
-	var builder strings.Builder
+	var components []string
 
-	// Header with navigation
+	// Header with section tabs
 	header := m.renderHeader()
-	builder.WriteString(header)
-	builder.WriteString("\n\n")
+	components = append(components, header)
 
 	// Main content viewport
-	builder.WriteString(m.viewport.View())
-	builder.WriteString("\n\n")
+	components = append(components, m.viewport.View())
 
-	// Footer with keybindings
-	footer := m.renderFooter()
-	builder.WriteString(footer)
-
-	return builder.String()
+	// Use lipgloss.JoinVertical for proper composition
+	// Footer is handled by app.go (universal controls only)
+	return lipgloss.JoinVertical(lipgloss.Left, components...)
 }
 
 // handleKeyMsg processes keyboard input for the help screen.
 //
+
+// GetNavigationHints returns screen-specific navigation hints for the footer.
+func (m *Help) GetNavigationHints() []string {
+	return []string{
+		"[↑↓/jk] Scroll",
+		"[←→/hl] Sections",
+		"[Tab] Next Section",
+		"[g/G] Top/Bottom",
+		"[/] Search",
+	}
+}
 
 func (m *Help) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
@@ -742,10 +764,9 @@ func (m *Help) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
 
-	// Update viewport size
+	// Update viewport size accounting for headers
 	header := m.renderHeader()
-	footer := m.renderFooter()
-	verticalMargins := lipgloss.Height(header) + lipgloss.Height(footer)
+	verticalMargins := lipgloss.Height(header) + 4 // Extra padding
 
 	m.viewport.Width = msg.Width
 	m.viewport.Height = msg.Height - verticalMargins
@@ -790,37 +811,12 @@ func (m *Help) renderHeader() string {
 	return builder.String()
 }
 
-// renderFooter creates the footer with keybindings.
-func (m *Help) renderFooter() string {
-	var keybindings []string
-
-	keybindings = append(keybindings, m.styles.Keybinding("↑↓/jk", "scroll"))
-	keybindings = append(keybindings, m.styles.Keybinding("←→/hl", "sections"))
-	keybindings = append(keybindings, m.styles.Keybinding("tab", "next section"))
-	keybindings = append(keybindings, m.styles.Keybinding("g/G", "top/bottom"))
-	keybindings = append(keybindings, m.styles.Keybinding("esc", "back"))
-	keybindings = append(keybindings, m.styles.Keybinding("q", "quit"))
-
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
-}
-
-// updateContent renders the current section content and updates the viewport.
+// NOTE: This is kept for compatibility but not used - app.go handles the universal footer.
 func (m *Help) updateContent() {
-	if m.currentSection >= len(m.sections) {
+	if m.currentSection >= len(m.sections) || m.currentSection >= len(m.renderedContent) {
 		return
 	}
 
-	section := m.sections[m.currentSection]
-
-	// Render markdown content using Glamour
-	rendered, err := m.renderer.Render(section.Content)
-	if err != nil {
-		// Fallback to plain text if rendering fails
-		rendered = section.Content
-	}
-
-	// Set content in viewport
-	m.viewport.SetContent(rendered)
+	// Use pre-rendered content from cache for instant display
+	m.viewport.SetContent(m.renderedContent[m.currentSection])
 }

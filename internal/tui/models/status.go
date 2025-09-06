@@ -256,23 +256,19 @@ func (m *Status) View() string {
 		return GoodbyeMessage
 	}
 
-	var builder strings.Builder
+	var components []string
 
 	// Header
 	header := m.renderHeader()
-	builder.WriteString(header)
-	builder.WriteString("\n\n")
+	components = append(components, header)
 
 	// Main content in columns
 	content := m.renderContent()
-	builder.WriteString(content)
-	builder.WriteString("\n\n")
+	components = append(components, content)
 
-	// Footer
-	footer := m.renderFooter()
-	builder.WriteString(footer)
-
-	return builder.String()
+	// Use lipgloss.JoinVertical for proper composition
+	// Footer is handled by app.go (universal controls only)
+	return lipgloss.JoinVertical(lipgloss.Left, components...)
 }
 
 // renderHeader creates the header with system health.
@@ -473,21 +469,19 @@ func (m *Status) renderSuggestions(width int) string {
 	return builder.String()
 }
 
-// renderFooter creates the footer with keybindings.
-func (m *Status) renderFooter() string {
-	var keybindings []string
-
-	keybindings = append(keybindings, m.styles.Keybinding("r", "refresh"))
-	keybindings = append(keybindings, m.styles.Keybinding("?", "help"))
-	keybindings = append(keybindings, m.styles.Keybinding("esc", "back"))
-	keybindings = append(keybindings, m.styles.Keybinding("q", "quit"))
-
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
+// GetNavigationHints returns screen-specific navigation hints for the footer.
+func (m *Status) GetNavigationHints() []string {
+	return []string{
+		"[r/F5] Refresh",
+		"[e] Export",
+		"[c] Clear Activity",
+	}
 }
 
-// getHealthDisplay returns a styled health status display.
+// renderNavigationHeader renders the screen-specific navigation hints with styled tabs.
+
+// renderFooter creates the footer with universal keybindings only.
+// NOTE: This is kept for compatibility but not used - app.go handles the universal footer.
 func (m *Status) getHealthDisplay(health string) string {
 	switch health {
 	case "excellent":

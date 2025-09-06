@@ -15,8 +15,8 @@ import (
 )
 
 func captureStderr(f func()) string {
-	old := os.Stderr
 	r, w, _ := os.Pipe()
+	old := os.Stderr
 	os.Stderr = w
 
 	f()
@@ -25,6 +25,7 @@ func captureStderr(f func()) string {
 	os.Stderr = old
 
 	out, _ := io.ReadAll(r)
+
 	return string(out)
 }
 
@@ -39,6 +40,7 @@ func captureStdout(f func()) string {
 	os.Stdout = old
 
 	out, _ := io.ReadAll(r)
+
 	return string(out)
 }
 
@@ -276,6 +278,7 @@ func TestOutputStateJSONResult(t *testing.T) {
 	})
 
 	var result map[string]any
+
 	err := json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err)
 	assert.Equal(t, "success", result["status"])
@@ -343,6 +346,7 @@ func TestOutputStateSuccessResult(t *testing.T) {
 
 			if tt.expectJSON {
 				var result map[string]any
+
 				err := json.Unmarshal([]byte(stdout), &result)
 				require.NoError(t, err)
 				assert.Equal(t, "success", result["status"])
@@ -410,6 +414,7 @@ func TestOutputStateErrorResult(t *testing.T) {
 
 			if tt.expectJSON {
 				var result map[string]any
+
 				err := json.Unmarshal([]byte(stdout), &result)
 				require.NoError(t, err)
 				assert.Equal(t, "error", result["status"])

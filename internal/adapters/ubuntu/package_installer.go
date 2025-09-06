@@ -182,6 +182,34 @@ func (p *PackageInstaller) IsInstalled(ctx context.Context, name string) (bool, 
 	return false, nil
 }
 
+// IsInstalledByMethod checks if a package is installed using a specific method.
+// This is much more efficient than checking all methods.
+func (p *PackageInstaller) IsInstalledByMethod(ctx context.Context, name string, method domain.InstallMethod) (bool, error) {
+	switch method {
+	case domain.MethodAPT:
+		return p.checkAPTThird(ctx, name), nil
+	case domain.MethodSnap:
+		return p.checkSnapFourth(ctx, name), nil
+	case domain.MethodFlatpak:
+		return p.checkFlatpakFirst(ctx, name)
+	case domain.MethodMise:
+		return p.checkMiseSecond(ctx, name), nil
+	case domain.MethodAqua:
+		return p.checkAquaFifth(ctx, name), nil
+	case domain.MethodDEB:
+		// DEB packages are checked via APT/dpkg
+		return p.checkAPTThird(ctx, name), nil
+	case domain.MethodScript, domain.MethodBinary,
+		domain.MethodGitHub, domain.MethodGitHubBinary,
+		domain.MethodGitHubBundle, domain.MethodGitHubJava:
+		// These typically install binaries, check PATH
+		return p.checkBinaryFallback(name), nil
+	default:
+		// Fallback to checking all methods
+		return p.IsInstalled(ctx, name)
+	}
+}
+
 // GetBestMethod returns the best installation method for a given source.
 func (p *PackageInstaller) GetBestMethod(source string) domain.InstallMethod {
 	if strings.Contains(source, "github.com") {
@@ -266,9 +294,27 @@ func (p *PackageInstaller) checkMiseSecond(ctx context.Context, name string) boo
 
 // checkAPTThird checks APT/DEB system package manager.
 func (p *PackageInstaller) checkAPTThird(ctx context.Context, name string) bool {
-	err := p.commandRunner.Execute(ctx, "dpkg-query", "-W", name)
+	// Quick check using dpkg -l which is faster than dpkg-query -W
+	// Format: dpkg -l <package> 2>/dev/null | grep "^ii"
+	// "ii" means installed and configured properly
+	output, err := p.commandRunner.ExecuteWithOutput(ctx, "dpkg", "-l", name)
+	if err != nil {
+		// Package not found or error occurred
+		return false
+	}
 
-	return err == nil
+	// Check for "ii" status at the beginning of any line
+	// ii = installed and configured
+	// rc = removed but config files remain
+	// un = unknown/not installed
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "ii ") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // checkSnapFourth checks Snap secondary package manager.

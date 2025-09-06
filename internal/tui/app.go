@@ -15,6 +15,14 @@ import (
 	"github.com/janderssonse/karei/internal/tui/styles"
 )
 
+// Layout constants for consistent spacing.
+const (
+	headerPadding     = 2  // Horizontal padding for headers
+	minViewportHeight = 1  // Minimum height for viewports
+	minContentWidth   = 10 // Minimum width for content areas
+	borderPadding     = 4  // Total padding from borders (2 per side)
+)
+
 // ErrNoTerminal is returned when the TUI is launched in a non-terminal environment.
 var ErrNoTerminal = errors.New("TUI requires a terminal environment")
 
@@ -37,6 +45,11 @@ const (
 const (
 	KeyEnter = "enter"
 )
+
+// helpPreloadedMsg is sent when help content has been pre-rendered.
+type helpPreloadedMsg struct {
+	model tea.Model
+}
 
 // App represents the main TUI application following tree-of-models pattern.
 // It manages persistent header/footer and delegates content to screen models.
@@ -98,12 +111,24 @@ func (a *App) Run(ctx context.Context) error {
 
 // Init implements the tea.Model interface.
 func (a *App) Init() tea.Cmd {
-	return a.contentModel.Init()
+	// Pre-create help model asynchronously for instant loading
+	preloadCmd := func() tea.Msg {
+		// Create help model with pre-rendered content
+		helpModel := models.NewHelp(a.styles)
+		return helpPreloadedMsg{model: helpModel}
+	}
+
+	// Combine initial command with preload command
+	return tea.Batch(a.contentModel.Init(), preloadCmd)
 }
 
 // Update implements the tea.Model interface with global navigation handling.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case helpPreloadedMsg:
+		// Cache the pre-rendered help model for instant access
+		a.models[HelpScreen] = msg.model
+		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
@@ -152,7 +177,36 @@ func (a *App) View() string {
 	content := a.renderContent()
 	footer := a.renderFooter()
 
-	// Use Lipgloss to compose the layout (avoiding layout arithmetic)
+	// Calculate heights for centering
+	headerHeight := 0
+	footerHeight := 0
+
+	if header != "" {
+		headerHeight = lipgloss.Height(header)
+	}
+
+	if footer != "" {
+		footerHeight = lipgloss.Height(footer)
+	}
+
+	contentHeight := lipgloss.Height(content)
+	totalUsedHeight := headerHeight + contentHeight + footerHeight
+	availableHeight := a.height - totalUsedHeight
+
+	// Center the content vertically by adding padding
+	if availableHeight > 0 {
+		// Add padding to center the content
+		topPadding := availableHeight / 2
+		bottomPadding := availableHeight - topPadding
+
+		// Create centered content with vertical padding
+		centeredContent := lipgloss.NewStyle().
+			PaddingTop(topPadding).
+			PaddingBottom(bottomPadding).
+			Render(content)
+		content = centeredContent
+	}
+
 	// Build layout based on what components are present
 	components := []string{}
 
@@ -304,10 +358,10 @@ func (a *App) renderHeader() string {
 	case ThemeScreen:
 		// Theme screen has full-width header to match footer border width
 		headerContent := lipgloss.NewStyle().Bold(true).Foreground(a.styles.Primary).Render(title)
-		// Calculate content width accounting for padding (1,2 = vertical, horizontal)
-		availableWidth := a.width - 4 // 4 = 2*horizontal padding
-		if availableWidth < 10 {
-			availableWidth = 10
+		// Calculate content width accounting for padding
+		availableWidth := a.width - borderPadding
+		if availableWidth < minContentWidth {
+			availableWidth = minContentWidth
 		}
 
 		return lipgloss.NewStyle().
@@ -344,15 +398,11 @@ func (a *App) shouldShowHeader() bool {
 
 // shouldShowFooter determines if the current screen should show the footer with navigation.
 func (a *App) shouldShowFooter() bool {
+	// Show footer on all main screens for universal navigation
 	switch a.currentScreen {
-	case AppsScreen, ConfigScreen, ThemeScreen:
+	case AppsScreen, ConfigScreen, ThemeScreen, StatusScreen, HelpScreen:
 		return true
 	default:
-		// Also check if we have an apps model as content (fallback)
-		if _, isAppsModel := a.contentModel.(*models.AppsModel); isAppsModel {
-			return true
-		}
-
 		return false
 	}
 }
@@ -365,74 +415,89 @@ func (a *App) renderContent() string {
 	return a.contentModel.View()
 }
 
-// renderFooter renders the footer with navigation help - ONLY for app selection pages.
+// getScreenHints returns screen-specific navigation hints for the current model.
+func (a *App) getScreenHints() []string {
+	switch model := a.contentModel.(type) {
+	case *models.AppsModel:
+		return model.GetNavigationHints()
+	case *models.Config:
+		return model.GetNavigationHints()
+	case *models.Status:
+		return model.GetNavigationHints()
+	case *models.Themes:
+		return model.GetNavigationHints()
+	case *models.Help:
+		return model.GetNavigationHints()
+	default:
+		return []string{}
+	}
+}
+
+// styleNavigationHints applies consistent styling to navigation hints.
+func (a *App) styleNavigationHints(hints []string) []string {
+	styledHints := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		var styledHint string
+
+		parts := strings.SplitN(hint, "]", 2)
+		if len(parts) == 2 {
+			key := strings.TrimPrefix(parts[0], "[")
+			desc := strings.TrimSpace(parts[1])
+
+			// Style with blue bold brackets/key, dimmed description
+			keyStyle := lipgloss.NewStyle().
+				Foreground(a.styles.Primary).
+				Bold(true)
+			descStyle := lipgloss.NewStyle().
+				Foreground(a.styles.Muted)
+
+			styledHint = keyStyle.Render("["+key+"]") + " " + descStyle.Render(desc)
+		} else {
+			// No brackets - just dimmed text
+			styledHint = lipgloss.NewStyle().
+				Foreground(a.styles.Muted).
+				Render(hint)
+		}
+
+		styledHints = append(styledHints, styledHint)
+	}
+
+	return styledHints
+}
+
+// renderFooter renders the footer with both screen-specific and universal navigation.
 func (a *App) renderFooter() string {
-	// Only show footer on AppsScreen, ThemeScreen, ConfigScreen
+	// Only show footer on main screens
 	if !a.shouldShowFooter() {
 		return ""
 	}
 
-	var keybindings []string
+	// Get screen-specific navigation hints
+	screenHints := a.getScreenHints()
 
-	// Context-aware footer based on search state (idiomatic UX)
-	switch a.currentScreen {
-	case AppsScreen, ConfigScreen:
-		// Check if AppsModel is in search mode
-		if appsModel, ok := a.contentModel.(*models.AppsModel); ok && appsModel.IsSearchActive() {
-			if appsModel.GetSearchHasFocus() {
-				// Search field has focus - minimal footer
-				keybindings = []string{
-					"[{}] Results",
-					"[Esc] Cancel",
-					"[Enter] Done",
-					"[q] Quit",
-				}
-			} else {
-				// Search results have focus - full action footer
-				keybindings = []string{
-					"[jk] Navigate",
-					"[{}] Field",
-					"[Space/d] Select",
-					"[Esc] Cancel",
-					"[q] Quit",
-				}
-			}
-		} else {
-			// Normal mode footer
-			keybindings = []string{
-				"[jk] Navigate Items",
-				"[{}] Navigate Categories",
-				"[H/L] Navigate Screens",
-				"[/] Search",
-				"[q] Quit",
-			}
-		}
-	case ThemeScreen:
-		keybindings = []string{
-			"[jk] Navigate Themes",
-			"[H/L] Navigate Screens",
-			"[p] Toggle Preview",
-			"[q] Quit",
-		}
-	default:
-		keybindings = []string{
-			"[H/L] Navigate Screens",
-			"[q] Quit",
-		}
+	// Universal controls - same for all screens
+	universalHints := []string{
+		"[H/L] Switch Screens",
+		"[?] Help",
+		"[Esc] Back",
+		"[q] Quit",
 	}
 
-	// Add screen-specific keybindings
-	screenKeys := a.getScreenKeybindings()
-	if len(screenKeys) > 0 {
-		keybindings = append(keybindings, screenKeys...)
-	}
+	// Style both sets of hints
+	styledScreenHints := a.styleNavigationHints(screenHints)
+	styledUniversalHints := a.styleNavigationHints(universalHints)
 
-	footerText := strings.Join(keybindings, "  ")
+	// Join hints horizontally
+	screenRow := strings.Join(styledScreenHints, "  ")
+	universalRow := strings.Join(styledUniversalHints, "  ")
 
-	// Calculate content width to match header (same as header calculation)
-	availableWidth := a.width - 4 // 4 = 2*horizontal padding
-	if availableWidth < 10 {
-		availableWidth = 10
+	// Combine rows vertically
+	footerContent := lipgloss.JoinVertical(lipgloss.Left, screenRow, universalRow)
+
+	// Calculate content width to match header
+	availableWidth := a.width - borderPadding
+	if availableWidth < minContentWidth {
+		availableWidth = minContentWidth
 	}
 
 	return lipgloss.NewStyle().
@@ -440,7 +505,7 @@ func (a *App) renderFooter() string {
 		Border(lipgloss.RoundedBorder(), true, false, false, false).
 		BorderForeground(a.styles.Primary).
 		Width(availableWidth).
-		Render(footerText)
+		Render(footerContent)
 }
 
 // getContentHeight calculates available height for content using Lipgloss Height() method.
@@ -480,7 +545,7 @@ func (a *App) getContentHeight() int {
 func (a *App) getScreenTitle() string {
 	switch a.currentScreen {
 	case MenuScreen:
-		return "Karei - Foundational Flow for Modern Devs"
+		return "Karei - Your Development Foundation"
 	case AppsScreen:
 		return "📦 Select Applications to Install"
 	case ThemeScreen:
@@ -498,21 +563,7 @@ func (a *App) getScreenTitle() string {
 	}
 }
 
-// getScreenKeybindings returns screen-specific keybindings.
-func (a *App) getScreenKeybindings() []string {
-	switch a.currentScreen {
-	case AppsScreen:
-		return []string{"[Space] Toggle Install", "[d] Uninstall", "[Enter] Apply"}
-	case ThemeScreen:
-		return []string{"[Enter] Apply Theme"}
-	case MenuScreen:
-		return []string{"[Enter] Select"}
-	default:
-		return []string{}
-	}
-}
-
-// handleNavigation handles navigation between screens via NavigateMsg.
+// handleNavigation handles navigation messages between screens.
 //
 //nolint:ireturn // Bubble Tea framework requires returning tea.Model interface
 func (a *App) handleNavigation(msg models.NavigateMsg) (tea.Model, tea.Cmd) {
