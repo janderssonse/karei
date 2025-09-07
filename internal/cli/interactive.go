@@ -12,11 +12,11 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/janderssonse/karei/internal/adapters/console"
 	"github.com/janderssonse/karei/internal/adapters/platform"
 	"github.com/janderssonse/karei/internal/application"
 	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/config"
-	"github.com/janderssonse/karei/internal/console"
 	"github.com/janderssonse/karei/internal/databases"
 )
 

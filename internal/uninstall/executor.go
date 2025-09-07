@@ -5,7 +5,7 @@ package uninstall
 
 import (
 	"context"
-	"github.com/janderssonse/karei/internal/system"
+	"github.com/janderssonse/karei/internal/adapters/system"
 )
 
 // CommandExecutor abstracts system command execution for testing.

@@ -14,10 +14,10 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/janderssonse/karei/internal/adapters/console"
 	"github.com/janderssonse/karei/internal/adapters/platform"
+	"github.com/janderssonse/karei/internal/adapters/system"
 	"github.com/janderssonse/karei/internal/config"
-	"github.com/janderssonse/karei/internal/console"
-	"github.com/janderssonse/karei/internal/system"
 )
 
 // Constants for verification and status strings.

@@ -6,7 +6,10 @@ package application
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strings"
 
+	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/domain"
 )
 
@@ -14,6 +17,8 @@ import (
 type InstallService struct {
 	packageService *domain.PackageService
 	systemDetector domain.SystemDetector
+	appsManager    *apps.Manager
+	verbose        bool
 }
 
 // NewInstallService creates a service with system detection capabilities.
@@ -21,7 +26,15 @@ func NewInstallService(packageService *domain.PackageService, systemDetector dom
 	return &InstallService{
 		packageService: packageService,
 		systemDetector: systemDetector,
+		appsManager:    apps.NewManager(false), // Non-verbose by default
+		verbose:        false,
 	}
+}
+
+// SetVerbose sets the verbosity level for the service.
+func (s *InstallService) SetVerbose(verbose bool) {
+	s.verbose = verbose
+	s.appsManager = apps.NewManager(verbose)
 }
 
 // InstallApplication detects optimal method and installs via appropriate manager.
@@ -101,4 +114,85 @@ func (s *InstallService) getBestMethodForSystem(_ string, systemInfo *domain.Sys
 
 	// Default to the system's package manager
 	return systemInfo.PackageManager.Method
+}
+
+// InstallGroup installs a predefined group of applications.
+func (s *InstallService) InstallGroup(ctx context.Context, groupName string) (*domain.InstallResult, error) {
+	result := &domain.InstallResult{}
+
+	groupApps, exists := apps.Groups[groupName]
+	if !exists {
+		result.Failed = append(result.Failed, groupName)
+		return result, fmt.Errorf("unknown group: %s", groupName)
+	}
+
+	for _, appName := range groupApps {
+		if err := s.appsManager.InstallApp(ctx, appName); err != nil {
+			result.Failed = append(result.Failed, appName)
+		} else {
+			result.Installed = append(result.Installed, appName)
+		}
+	}
+
+	return result, nil
+}
+
+// InstallPackages installs multiple packages.
+func (s *InstallService) InstallPackages(ctx context.Context, packages []string) (*domain.InstallResult, error) {
+	result := &domain.InstallResult{}
+
+	for _, pkg := range packages {
+		pkg = strings.TrimSpace(pkg)
+		if pkg == "" {
+			continue
+		}
+
+		if err := s.appsManager.InstallApp(ctx, pkg); err != nil {
+			result.Failed = append(result.Failed, pkg)
+		} else {
+			result.Installed = append(result.Installed, pkg)
+		}
+	}
+
+	return result, nil
+}
+
+// GetAvailableGroups returns all available installation groups.
+func (s *InstallService) GetAvailableGroups() map[string][]string {
+	return apps.Groups
+}
+
+// IsAppInstalled checks if an application is installed.
+func (s *InstallService) IsAppInstalled(ctx context.Context, appName string) bool {
+	// Check if the app can be found via package manager query
+	cmd := exec.CommandContext(ctx, "which", appName)
+	if err := cmd.Run(); err == nil {
+		return true
+	}
+
+	// Could also check with package managers
+	// This is a simplified check
+	return false
+}
+
+// GetAppDescription returns the description of an application.
+func (s *InstallService) GetAppDescription(appName string) string {
+	if app, exists := apps.Apps[appName]; exists {
+		return app.Description
+	}
+
+	return ""
+}
+
+// GetAppVersion returns the version of an installed application.
+func (s *InstallService) GetAppVersion(ctx context.Context, appName string) string {
+	// Try to get version from the app itself
+	cmd := exec.CommandContext(ctx, appName, "--version")
+
+	output, err := cmd.Output()
+	if err == nil {
+		return strings.TrimSpace(string(output))
+	}
+
+	return ""
 }

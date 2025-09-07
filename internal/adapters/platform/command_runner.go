@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/janderssonse/karei/internal/network"
+	"github.com/janderssonse/karei/internal/adapters/network"
 )
 
 // CommandRunner implements the CommandRunner port for real system commands.

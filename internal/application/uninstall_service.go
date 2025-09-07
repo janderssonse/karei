@@ -407,3 +407,26 @@ func (s *UninstallService) uninstallZoom(ctx context.Context) error {
 
 	return nil
 }
+
+// UninstallPackages uninstalls multiple packages.
+func (s *UninstallService) UninstallPackages(ctx context.Context, packages []string) (*domain.UninstallResult, error) {
+	result := &domain.UninstallResult{}
+
+	for _, pkg := range packages {
+		pkg = strings.TrimSpace(pkg)
+		if pkg == "" {
+			continue
+		}
+
+		if err := s.UninstallApp(ctx, pkg); err != nil {
+			result.Failed = append(result.Failed, pkg)
+			if errors.Is(err, ErrUnknownApp) {
+				result.NotFound = append(result.NotFound, pkg)
+			}
+		} else {
+			result.Uninstalled = append(result.Uninstalled, pkg)
+		}
+	}
+
+	return result, nil
+}

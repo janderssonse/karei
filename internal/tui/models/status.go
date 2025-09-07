@@ -5,6 +5,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/janderssonse/karei/internal/application"
 	"github.com/janderssonse/karei/internal/tui/styles"
 )
 
@@ -58,6 +60,7 @@ type Status struct {
 	quitting       bool
 	keyMap         StatusKeyMap
 	helpModal      *HelpModal
+	statusService  *application.StatusService // Optional real data service
 }
 
 // StatusKeyMap defines key bindings for the status screen.
@@ -92,7 +95,12 @@ func DefaultStatusKeyMap() StatusKeyMap {
 
 // NewStatus creates a new status model.
 func NewStatus(styleConfig *styles.Styles) *Status {
-	// Simulate system status data - in real implementation this would come from hexagonal architecture
+	return NewStatusWithService(styleConfig, nil)
+}
+
+// NewStatusWithService creates a status model with optional real data service.
+func NewStatusWithService(styleConfig *styles.Styles, service *application.StatusService) *Status {
+	// Default mock data - will be replaced by real data if service is provided
 	systemStatus := SystemStatus{
 		Health:             "excellent",
 		InstalledApps:      23,
@@ -203,6 +211,7 @@ func NewStatus(styleConfig *styles.Styles) *Status {
 		suggestions:    suggestions,
 		keyMap:         DefaultStatusKeyMap(),
 		helpModal:      helpModal,
+		statusService:  service,
 	}
 }
 
@@ -618,18 +627,20 @@ func (m *Status) renderRecentActivity(width int, boxHeight int) string {
 
 	// Show max activities that fit in the box
 	maxActivities := boxHeight - 2 // Account for title and spacing
+
 	activityCount := len(m.recentActivity)
 	if activityCount > maxActivities && maxActivities > 0 {
 		activityCount = maxActivities
 	}
 
-	for i := 0; i < activityCount; i++ {
+	for i := range activityCount {
 		activity := m.recentActivity[i]
 		timeStr := activity.Timestamp.Format("15:04")
 		statusIcon := m.styles.StatusIcon(activity.Status)
 
 		line := fmt.Sprintf("[%s] %s %s", timeStr, statusIcon, activity.Description)
 		content.WriteString(line)
+
 		if i < activityCount-1 {
 			content.WriteString("\n")
 		}
@@ -659,14 +670,16 @@ func (m *Status) renderSuggestions(width int, boxHeight int) string {
 
 	// Show max suggestions that fit in the box
 	maxSuggestions := boxHeight - 2 // Account for title and spacing
+
 	suggestionCount := len(m.suggestions)
 	if suggestionCount > maxSuggestions && maxSuggestions > 0 {
 		suggestionCount = maxSuggestions
 	}
 
-	for i := 0; i < suggestionCount; i++ {
-		line := fmt.Sprintf("• %s", m.suggestions[i])
+	for i := range suggestionCount {
+		line := "• " + m.suggestions[i]
 		content.WriteString(line)
+
 		if i < suggestionCount-1 {
 			content.WriteString("\n")
 		}
@@ -722,11 +735,28 @@ func (m *Status) formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// refreshStatus simulates refreshing the status data.
+// refreshStatus fetches real or simulated status data.
 func (m *Status) refreshStatus() tea.Cmd {
-	return tea.Tick(time.Millisecond*500, func(_ time.Time) tea.Msg {
-		// In real implementation, this would query the hexagonal architecture
-		// for updated system status
+	return func() tea.Msg {
+		// Use real service if available
+		if m.statusService != nil {
+			// Fetch real data (context would come from app in production)
+			ctx := context.Background()
+			if data, err := m.statusService.GetSystemStatus(ctx); err == nil {
+				// Update system status with real data
+				m.systemStatus.InstalledApps = data.InstalledApps
+				m.systemStatus.AvailableApps = data.AvailableApps
+				m.systemStatus.CurrentTheme = data.CurrentTheme
+				m.systemStatus.DiskSpaceUsed = application.FormatDiskSpace(data.DiskUsageGB)
+				m.systemStatus.DiskSpaceAvailable = application.FormatDiskSpace(data.DiskAvailGB)
+				m.systemStatus.SystemUptime = application.FormatUptime(data.UptimeHours)
+				m.systemStatus.LastUpdate = time.Now()
+			}
+		}
+
+		// Simulate delay for visual feedback
+		time.Sleep(500 * time.Millisecond)
+
 		return refreshCompleteMsg{}
-	})
+	}
 }

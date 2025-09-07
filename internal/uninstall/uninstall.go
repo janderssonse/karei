@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/janderssonse/karei/internal/adapters/system"
 	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/system"
 )
 
 var (

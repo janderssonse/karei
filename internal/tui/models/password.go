@@ -12,7 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/janderssonse/karei/internal/system"
+	"github.com/janderssonse/karei/internal/adapters/system"
 	"github.com/janderssonse/karei/internal/tui/styles"
 )
 

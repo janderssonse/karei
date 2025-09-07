@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/janderssonse/karei/internal/adapters/system"
 	"github.com/janderssonse/karei/internal/config"
-	"github.com/janderssonse/karei/internal/system"
 	"github.com/pelletier/go-toml/v2"
 )
 

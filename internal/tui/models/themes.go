@@ -585,55 +585,14 @@ func (m *Themes) renderCleanHeader() string {
 
 // renderCleanFooter renders the new simplified footer with context-aware actions.
 func (m *Themes) renderCleanFooter() string {
-	// Context-aware footer actions with styled keys and descriptions
-	var actions []string
-
-	// Styles for different parts (matching apps page)
-	keyStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(m.styles.Primary) // Keys in primary color (blue)
-
-	bracketStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(m.styles.Primary) // Brackets also in primary color
-
-	actionStyle := lipgloss.NewStyle().
-		Foreground(m.styles.Muted) // Actions in muted color
-
-	// Helper function to format action (same as apps page)
-	formatAction := func(key, action string) string {
-		return bracketStyle.Render("[") +
-			keyStyle.Render(key) +
-			bracketStyle.Render("]") +
-			" " +
-			actionStyle.Render(action)
+	actions := []FooterAction{
+		{Key: "←→", Action: "Choose"},
+		{Key: "Enter", Action: "Apply"},
+		{Key: "Space", Action: "Preview"},
+		{Key: "Esc", Action: "Back"},
 	}
 
-	// Theme selection actions
-	actions = []string{
-		formatAction("←→", "Choose"),
-		formatAction("Enter", "Apply"),
-		formatAction("Space", "Preview"),
-		formatAction("Esc", "Back"),
-	}
-
-	// Always add help with special styling (dim yellow to stand out)
-	helpKey := bracketStyle.Render("[") +
-		lipgloss.NewStyle().Bold(true).Foreground(m.styles.Warning).Render("?") +
-		bracketStyle.Render("]")
-	actions = append(actions, helpKey+" "+actionStyle.Render("Help"))
-
-	// Join actions with more spacing
-	footerText := strings.Join(actions, "   ")
-
-	// Style the footer container (exactly matching apps page)
-	return lipgloss.NewStyle().
-		Padding(0, 2).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderTop(true).
-		BorderForeground(lipgloss.Color("240")).
-		Width(m.width).
-		Render(footerText)
+	return RenderFooter(m.styles, m.width, actions, true)
 }
 
 // GetSelectedTheme returns the theme at the current selection index.

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/janderssonse/karei/internal/adapters/network"
 	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/network"
 )
 
 // Static error definitions for err113 compliance.

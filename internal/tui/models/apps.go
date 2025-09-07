@@ -1743,7 +1743,8 @@ func (m *AppsModel) handleDownNavigation() {
 	} else if !m.searchActive {
 		// Navigate down in regular categories
 		m.navigateDown()
-		// Don't update content for regular navigation - viewport handles scrolling
+		// Mark content for update to refresh details panel
+		m.contentNeedsUpdate = true
 	}
 }
 
@@ -1756,7 +1757,8 @@ func (m *AppsModel) handleUpNavigation() {
 	} else if !m.searchActive {
 		// Navigate up in regular categories
 		m.navigateUp()
-		// Don't update content for regular navigation - viewport handles scrolling
+		// Mark content for update to refresh details panel
+		m.contentNeedsUpdate = true
 	}
 }
 

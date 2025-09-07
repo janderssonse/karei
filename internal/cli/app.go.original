@@ -7,25 +7,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	cliAdapter "github.com/janderssonse/karei/internal/adapters/cli"
-	"github.com/janderssonse/karei/internal/adapters/console"
-	"github.com/janderssonse/karei/internal/adapters/network"
-	"github.com/janderssonse/karei/internal/adapters/platform"
-	"github.com/janderssonse/karei/internal/adapters/system"
-	"github.com/janderssonse/karei/internal/adapters/ubuntu"
-	"github.com/janderssonse/karei/internal/application"
-	"github.com/janderssonse/karei/internal/apps"
-	"github.com/janderssonse/karei/internal/config"
-	"github.com/janderssonse/karei/internal/desktop"
-	"github.com/janderssonse/karei/internal/domain"
-	"github.com/janderssonse/karei/internal/tui"
-	"github.com/urfave/cli/v3"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	cliAdapter "github.com/janderssonse/karei/internal/adapters/cli"
+	"github.com/janderssonse/karei/internal/adapters/platform"
+	"github.com/janderssonse/karei/internal/application"
+	"github.com/janderssonse/karei/internal/apps"
+	"github.com/janderssonse/karei/internal/config"
+	"github.com/janderssonse/karei/internal/adapters/console"
+	"github.com/janderssonse/karei/internal/desktop"
+	"github.com/janderssonse/karei/internal/domain"
+
+	"github.com/janderssonse/karei/internal/adapters/system"
+	"github.com/janderssonse/karei/internal/tui"
+	"github.com/janderssonse/karei/internal/uninstall"
+	"github.com/urfave/cli/v3"
 )
 
 // Exit codes follow standard Unix conventions for better scripting support.
@@ -97,39 +98,12 @@ type CLI struct {
 	color   string        // "auto", "always", "never"
 	timeout time.Duration // Network operation timeout
 	yes     bool          // Auto-accept all prompts
-
-	// Services for business logic
-	installService   *application.InstallService
-	themeService     *application.ThemeService
-	fontService      *application.FontService
-	statusService    *application.StatusService
-	uninstallService *application.UninstallService
 }
 
 // NewCLI creates a clean, idiomatic CLI interface
 // Replaces: app.go, simplified.go, and all 20+ individual command files.
 func NewCLI() *CLI {
-	// Initialize infrastructure dependencies
-	commandRunner := platform.NewCommandRunner(false, false)
-	fileManager := platform.NewFileManager(false)
-	systemDetector := platform.NewSystemDetector(commandRunner, fileManager)
-	packageInstaller := ubuntu.NewPackageInstaller(commandRunner, fileManager, false, false)
-	packageService := domain.NewPackageService(packageInstaller, systemDetector)
-	networkClient := network.NewHTTPClient(30 * time.Second) // 30 second timeout
-
-	// Set up directories
-	configDir := config.GetKareiPath()
-	fontsDir := filepath.Join(configDir, "fonts")
-	themesDir := filepath.Join(configDir, "themes")
-
-	app := &CLI{
-		// Initialize application services
-		installService:   application.NewInstallService(packageService, systemDetector),
-		themeService:     application.NewThemeService(fileManager, commandRunner, configDir, themesDir),
-		fontService:      application.NewFontService(fileManager, commandRunner, networkClient, fontsDir, configDir),
-		statusService:    application.NewStatusService(packageInstaller, commandRunner),
-		uninstallService: application.NewUninstallService(fileManager, commandRunner, packageInstaller, false),
-	}
+	app := &CLI{}
 
 	app.app = &cli.Command{
 		Name:    "karei",
@@ -294,122 +268,133 @@ func (app *CLI) handleInstallAction(ctx context.Context, cmd *cli.Command) error
 	return app.runInstall(ctx, cmd)
 }
 
-// ensureInstallService initializes the install service if not already done.
-func (app *CLI) ensureInstallService() {
-	if app.installService == nil {
-		commandRunner := platform.NewCommandRunner(app.verbose, false)
-		fileManager := platform.NewFileManager(app.verbose)
-		systemDetector := platform.NewSystemDetector(commandRunner, fileManager)
-		packageInstaller := ubuntu.NewPackageInstaller(commandRunner, fileManager, app.verbose, false)
-		packageService := domain.NewPackageService(packageInstaller, systemDetector)
-		app.installService = application.NewInstallService(packageService, systemDetector)
-	}
-
-	app.installService.SetVerbose(app.verbose)
-}
-
 // runInstall handles the install command execution with output adapter.
 func (app *CLI) runInstall(ctx context.Context, cmd *cli.Command) error {
-	// Apply timeout
-	ctx, cancel := app.applyTimeout(ctx)
-	defer cancel()
+	// Apply global timeout if specified
+	if app.timeout > 0 {
+		var cancel context.CancelFunc
 
-	// Create output adapter
+		ctx, cancel = context.WithTimeout(ctx, app.timeout)
+		defer cancel()
+	}
+
+	// Create output adapter based on flags
 	output := cliAdapter.OutputFromContext(app.json, app.quiet)
 
-	// Check for help
+	// Check for help flag first
 	if cmd.Bool("help") {
 		app.showInstallHelp(output)
 		return nil
 	}
 
-	// Validate and get flags
+	// Validate flags
 	packagesFlag, groupFlag, err := app.validateInstallFlags(cmd)
 	if err != nil {
 		return err
 	}
 
-	// Ensure service is initialized
-	app.ensureInstallService()
+	// Track installation time
+	startTime := time.Now()
+	manager := apps.NewManager(app.verbose)
 
-	// Execute installation
-	result := app.executeInstallation(ctx, packagesFlag, groupFlag, output)
+	// Prepare result tracking
+	result := &domain.InstallResult{
+		Installed: []string{},
+		Failed:    []string{},
+		Skipped:   []string{},
+		Timestamp: startTime,
+	}
+
+	// Process group installation
+	if groupFlag != "" {
+		app.installGroupWithOutput(ctx, manager, groupFlag, result, output)
+	}
+
+	// Process individual packages
+	if packagesFlag != "" {
+		packages := strings.Split(packagesFlag, ",")
+		for _, pkg := range packages {
+			pkg = strings.TrimSpace(pkg)
+			if pkg != "" {
+				app.installSingleWithOutput(ctx, manager, pkg, result, output)
+			}
+		}
+	}
+
+	// Calculate duration
+	result.Duration = time.Since(startTime)
 
 	// Output results
 	if err := app.outputInstallResults(result, output); err != nil {
 		return domain.NewExitError(ExitGeneralError, "failed to output results", err)
 	}
 
+	// Return appropriate exit code
 	return app.getInstallExitCode(result)
 }
 
-// applyTimeout applies the configured timeout to the context if set.
-// The caller is responsible for calling the cancel function.
-func (app *CLI) applyTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	if app.timeout > 0 {
-		return context.WithTimeout(ctx, app.timeout)
-	}
+// installGroupWithOutput installs a group of applications with output support.
+func (app *CLI) installGroupWithOutput(ctx context.Context, manager *apps.Manager, group string, result *domain.InstallResult, output domain.OutputPort) {
+	groupApps, exists := apps.Groups[group]
+	if !exists {
+		_ = output.Error("Unknown group: " + group)
+		result.Failed = append(result.Failed, group)
 
-	return ctx, func() {} // No-op cancel for when no timeout is set
-}
-
-// executeInstallation performs the actual installation of packages or groups.
-func (app *CLI) executeInstallation(ctx context.Context, packagesFlag, groupFlag string, output domain.OutputPort) *domain.InstallResult {
-	startTime := time.Now()
-
-	var result *domain.InstallResult
-
-	var err error
-
-	// Install group if specified
-	if groupFlag != "" {
-		result, err = app.installService.InstallGroup(ctx, groupFlag)
-
-		if err != nil && !errors.Is(err, apps.ErrUnknownGroup) {
-			_ = output.Error("Failed to install group: " + err.Error())
-		}
-
-		app.outputInstallProgress(result, output)
-	}
-
-	// Install packages if specified
-	if packagesFlag != "" {
-		packages := strings.Split(packagesFlag, ",")
-
-		result, err = app.installService.InstallPackages(ctx, packages)
-		if err != nil {
-			_ = output.Error("Installation errors occurred")
-		}
-
-		app.outputInstallProgress(result, output)
-	}
-
-	// Set timing information
-	if result != nil {
-		result.Duration = time.Since(startTime)
-		result.Timestamp = startTime
-	}
-
-	return result
-}
-
-// outputInstallProgress outputs progress for each installed/failed package.
-func (app *CLI) outputInstallProgress(result *domain.InstallResult, output domain.OutputPort) {
-	if result == nil {
 		return
 	}
 
-	for _, pkg := range result.Installed {
-		_ = output.Success(fmt.Sprintf("✓ Installed %s successfully", pkg), nil)
+	_ = output.Progress(fmt.Sprintf("Installing %s group (%d apps)...", group, len(groupApps)))
+
+	groupInstalled := 0
+
+	for _, appName := range groupApps {
+		_ = output.Progress(fmt.Sprintf("  Installing %s...", appName))
+
+		if err := manager.InstallApp(ctx, appName); err != nil {
+			// Group errors are shown inline, use simpler format
+			_ = output.Info("  ✗ Failed to install " + appName)
+			result.Failed = append(result.Failed, appName)
+		} else {
+			_ = output.Info("  ✓ Installed " + appName)
+			result.Installed = append(result.Installed, appName)
+			groupInstalled++
+		}
 	}
 
-	for _, pkg := range result.Failed {
-		_ = output.Error("✗ Failed to install " + pkg)
+	switch {
+	case groupInstalled == len(groupApps):
+		_ = output.Success(fmt.Sprintf("✓ %s group installed successfully (%d apps)", group, groupInstalled), nil)
+	case groupInstalled > 0:
+		_ = output.Info(fmt.Sprintf("⚠ %s group partially installed (%d/%d apps)", group, groupInstalled, len(groupApps)))
+	default:
+		_ = output.Error("✗ Failed to install " + group + " group")
 	}
 }
 
-// installGroupWithOutput installs a group of applications with output support.
-// Removed installGroupWithOutput and installSingleWithOutput - now using service methods
+// installSingleWithOutput installs a single application with output support.
+func (app *CLI) installSingleWithOutput(ctx context.Context, manager *apps.Manager, pkg string, result *domain.InstallResult, output domain.OutputPort) {
+	// Notify about boundary crossing operations
+	if !output.IsQuiet() {
+		_ = output.Info("→ Installing " + pkg)
+		// Keep progress simple - users don't need internal steps
+		if app.verbose {
+			_ = output.Progress("  Preparing installation...")
+		}
+	}
+
+	if err := manager.InstallApp(ctx, pkg); err != nil {
+		errorMsg := domain.FormatErrorMessage(err, pkg, app.verbose)
+		_ = output.Error(errorMsg)
+
+		result.Failed = append(result.Failed, pkg)
+	} else {
+		_ = output.Success(fmt.Sprintf("✓ Installed %s successfully", pkg), nil)
+
+		// No need to mention PATH - users know what "installed" means
+
+		result.Installed = append(result.Installed, pkg)
+	}
+}
 
 // outputInstallResults outputs the installation results using the output adapter.
 func (app *CLI) outputInstallResults(result *domain.InstallResult, output domain.OutputPort) error {
@@ -624,41 +609,48 @@ func (app *CLI) runUninstall(ctx context.Context, cmd *cli.Command) error {
 		return domain.NewExitError(ExitUsageError, "specify --packages flag with comma-separated list of packages", nil)
 	}
 
-	// Initialize uninstall service if needed
-	if app.uninstallService == nil {
-		commandRunner := platform.NewCommandRunner(app.verbose, false)
-		fileManager := platform.NewFileManager(app.verbose)
-		packageInstaller := ubuntu.NewPackageInstaller(commandRunner, fileManager, app.verbose, false)
-		app.uninstallService = application.NewUninstallService(fileManager, commandRunner, packageInstaller, app.verbose)
-	}
-
 	// Track uninstallation time
 	startTime := time.Now()
+	uninstaller := uninstall.NewUninstaller(app.verbose)
 
-	// Use service to uninstall packages
+	// Prepare result tracking
+	result := &domain.UninstallResult{
+		Uninstalled: []string{},
+		Failed:      []string{},
+		NotFound:    []string{},
+		Timestamp:   startTime,
+	}
+
+	// Process each package from the flag
 	packages := strings.Split(packagesFlag, ",")
+	for _, pkg := range packages {
+		pkg = strings.TrimSpace(pkg)
+		if pkg == "" {
+			continue
+		}
 
-	result, err := app.uninstallService.UninstallPackages(ctx, packages)
-	if err != nil {
-		_ = output.Error("Uninstallation errors occurred")
-	}
+		_ = output.Progress(fmt.Sprintf("Uninstalling %s...", pkg))
 
-	// Output progress for each package
-	for _, pkg := range result.Uninstalled {
+		if err := uninstaller.UninstallSpecial(ctx, pkg); err != nil {
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not installed") {
+				_ = output.Info(fmt.Sprintf("⚠ %s not installed", pkg))
+				result.NotFound = append(result.NotFound, pkg)
+			} else {
+				errorMsg := domain.FormatErrorMessage(err, pkg, app.verbose)
+				_ = output.Error(errorMsg)
+
+				result.Failed = append(result.Failed, pkg)
+			}
+
+			continue
+		}
+
 		_ = output.Success("✓ Uninstalled "+pkg, nil)
-	}
-
-	for _, pkg := range result.Failed {
-		_ = output.Error("✗ Failed to uninstall " + pkg)
-	}
-
-	for _, pkg := range result.NotFound {
-		_ = output.Info(fmt.Sprintf("⚠ %s not installed", pkg))
+		result.Uninstalled = append(result.Uninstalled, pkg)
 	}
 
 	// Calculate duration
 	result.Duration = time.Since(startTime)
-	result.Timestamp = startTime
 
 	// Output results
 	if err := app.outputUninstallResults(result, output); err != nil {
