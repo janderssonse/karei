@@ -247,8 +247,7 @@ func (m *Menu) renderMenu() string {
 
 		// Show description for selected item
 		if itemIndex == m.cursor {
-			descStyle := lipgloss.NewStyle().Foreground(m.styles.Muted)
-			desc := descStyle.Render("    " + item.Description)
+			desc := m.styles.MutedText.Render("    " + item.Description)
 			builder.WriteString(desc)
 			builder.WriteString("\n")
 		}

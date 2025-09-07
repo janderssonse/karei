@@ -644,7 +644,8 @@ fi
 	for i, section := range sections {
 		rendered, err := renderer.Render(section.Content)
 		if err != nil {
-			// Fallback to plain text if rendering fails
+			// Fallback to plain text if rendering fails - this is acceptable
+			// as the content is still readable without markdown formatting
 			rendered = section.Content
 		}
 

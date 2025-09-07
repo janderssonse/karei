@@ -294,27 +294,25 @@ func (p *PackageInstaller) checkMiseSecond(ctx context.Context, name string) boo
 
 // checkAPTThird checks APT/DEB system package manager.
 func (p *PackageInstaller) checkAPTThird(ctx context.Context, name string) bool {
-	// Quick check using dpkg -l which is faster than dpkg-query -W
-	// Format: dpkg -l <package> 2>/dev/null | grep "^ii"
-	// "ii" means installed and configured properly
-	output, err := p.commandRunner.ExecuteWithOutput(ctx, "dpkg", "-l", name)
+	// Quick check using dpkg-query which is more reliable
+	// dpkg-query returns exit code 1 if package not found (which is normal)
+	// We use -W with format to get clean output
+	output, err := p.commandRunner.ExecuteWithOutput(ctx, "dpkg-query", "-W", "-f=${Status}", name)
 	if err != nil {
-		// Package not found or error occurred
+		// Check if it's a context cancellation/timeout (real error)
+		if ctx.Err() != nil {
+			// Context cancelled or timed out - this is a real error
+			// But for IsInstalled, we can only return bool, so return false
+			// The calling code should handle context errors separately
+			return false
+		}
+		// Otherwise, package not found is normal - not an error
 		return false
 	}
 
-	// Check for "ii" status at the beginning of any line
-	// ii = installed and configured
-	// rc = removed but config files remain
-	// un = unknown/not installed
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "ii ") {
-			return true
-		}
-	}
-
-	return false
+	// Check if status contains "install ok installed"
+	// This is the proper way to check if a package is fully installed
+	return strings.Contains(output, "install ok installed")
 }
 
 // checkSnapFourth checks Snap secondary package manager.

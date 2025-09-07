@@ -41,6 +41,9 @@ type CompletedOperationsMsg struct {
 	Operations []SelectedOperation
 }
 
+// SmoothScrollMsg triggers smooth viewport scrolling after navigation.
+type SmoothScrollMsg struct{}
+
 // SearchActivatedMsg indicates search has been activated.
 type SearchActivatedMsg struct {
 	Active bool

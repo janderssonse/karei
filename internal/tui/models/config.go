@@ -46,6 +46,7 @@ type Config struct {
 	quitting   bool
 	currentTab int
 	tabs       []string
+	helpModal  *HelpModal
 }
 
 // NewConfig creates a new configuration model.
@@ -225,11 +226,16 @@ func NewConfig(styleConfig *styles.Styles) *Config {
 		tabs[i] = section.Title
 	}
 
+	// Create help modal
+	helpModal := NewHelpModal()
+	helpModal.SetScreen("settings")
+
 	return &Config{
 		styles:     styleConfig,
 		sections:   sections,
 		tabs:       tabs,
 		currentTab: 0,
+		helpModal:  helpModal,
 	}
 }
 
@@ -270,28 +276,65 @@ func (m *Config) View() string {
 		return "Configuration saved! Goodbye!\n"
 	}
 
+	// If help modal is visible, show it as an overlay
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		return m.renderWithModal()
+	}
+
+	return m.renderBaseView()
+}
+
+// renderWithModal renders the view with modal overlay.
+func (m *Config) renderWithModal() string {
+	// Get modal view
+	modalView := m.helpModal.View()
+
+	// The idiomatic Bubble Tea approach: center the modal on a dark background
+	// This provides a clean modal experience without complex compositing
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		modalView,
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("235")), // Dark gray background
+	)
+}
+
+// renderBaseView renders the main config view without overlays.
+func (m *Config) renderBaseView() string {
 	// If form is active, show form
 	if m.form != nil {
 		return m.form.View()
 	}
 
-	var builder strings.Builder
+	// Build the complete view: header + tabs + content + footer
+	components := []string{}
 
-	// Header
-	header := m.renderHeader()
-	builder.WriteString(header)
-	builder.WriteString("\n\n")
+	// Add the clean header
+	header := m.renderCleanHeader()
+	components = append(components, header)
 
-	// Tabs
+	// Add tabs
 	tabs := m.renderTabs()
-	builder.WriteString(tabs)
-	builder.WriteString("\n\n")
+	if tabs != "" {
+		components = append(components, tabs)
+	}
 
-	// Current section content
+	// Add current section content
 	content := m.renderSection(m.sections[m.currentTab])
-	builder.WriteString(content)
+	components = append(components, content)
 
-	return builder.String()
+	// Add the clean footer
+	footer := m.renderCleanFooter()
+	components = append(components, footer)
+
+	// Compose with Lipgloss
+	if len(components) == 1 {
+		return components[0]
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top, components...)
 }
 
 // GetConfiguration returns all configuration field values as a map.
@@ -307,12 +350,100 @@ func (m *Config) GetConfiguration() map[string]any {
 	return config
 }
 
-// renderHeader creates the header.
-func (m *Config) renderHeader() string {
-	title := m.styles.Title.Render("⚙️ System Configuration")
-	subtitle := m.styles.Subtitle.Render("Configure your development environment preferences")
+// renderCleanHeader renders the new simplified header format.
+func (m *Config) renderCleanHeader() string {
+	// Left side: App name » Current location
+	location := "Karei » Configuration"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
 
-	return lipgloss.JoinVertical(lipgloss.Left, title, subtitle)
+	// Right side: Status (unsaved changes indicator)
+	status := ""
+	// In a real implementation, track if there are unsaved changes
+	// For now, we'll leave it empty
+
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
+
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
+}
+
+// renderCleanFooter renders the new simplified footer with context-aware actions.
+func (m *Config) renderCleanFooter() string {
+	// Context-aware footer actions with styled keys and descriptions
+	var actions []string
+
+	// Styles for different parts (matching apps page)
+	keyStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Keys in primary color (blue)
+
+	bracketStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Brackets also in primary color
+
+	actionStyle := lipgloss.NewStyle().
+		Foreground(m.styles.Muted) // Actions in muted color
+
+	// Helper function to format action (same as apps page)
+	formatAction := func(key, action string) string {
+		return bracketStyle.Render("[") +
+			keyStyle.Render(key) +
+			bracketStyle.Render("]") +
+			" " +
+			actionStyle.Render(action)
+	}
+
+	// Config page actions
+	actions = []string{
+		formatAction("Tab", "Section"),
+		formatAction("Enter", "Edit"),
+		formatAction("S", "Save"),
+		formatAction("Esc", "Back"),
+	}
+
+	// Always add help with special styling (dim yellow to stand out)
+	helpKey := bracketStyle.Render("[") +
+		lipgloss.NewStyle().Bold(true).Foreground(m.styles.Warning).Render("?") +
+		bracketStyle.Render("]")
+	actions = append(actions, helpKey+" "+actionStyle.Render("Help"))
+
+	// Join actions with more spacing
+	footerText := strings.Join(actions, "   ")
+
+	// Style the footer container (exactly matching apps page)
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(footerText)
 }
 
 // renderTabs creates the tab navigation.
@@ -322,51 +453,78 @@ func (m *Config) renderTabs() string {
 	for i, tab := range m.tabs {
 		var style lipgloss.Style
 		if i == m.currentTab {
-			style = m.styles.Selected.
+			// Active tab - bold and highlighted
+			style = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(m.styles.Primary).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderBottom(true).
+				BorderForeground(m.styles.Primary).
 				Padding(0, 2).
 				MarginRight(1)
 		} else {
-			style = m.styles.Unselected.
+			// Inactive tab - muted
+			style = lipgloss.NewStyle().
+				Foreground(m.styles.Muted).
 				Padding(0, 2).
-				MarginRight(1).
-				Faint(true)
+				MarginRight(1)
 		}
 
 		tabs = append(tabs, style.Render(tab))
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+	// Add left padding to align with content
+	tabLine := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+
+	return lipgloss.NewStyle().
+		PaddingLeft(2).
+		MarginTop(1).
+		Render(tabLine)
 }
 
 // renderSection renders a configuration section.
 func (m *Config) renderSection(section ConfigSection) string {
-	var builder strings.Builder
+	// Calculate available height for content area
+	headerHeight := 3 // Header with border
+	footerHeight := 3 // Footer with border
+	tabsHeight := 3   // Tabs area
+	availableHeight := m.height - headerHeight - footerHeight - tabsHeight
 
-	// Calculate available space dynamically
-	header := m.renderHeader()
-	tabs := m.renderTabs()
-
-	availableWidth := m.width
-	availableHeight := m.height - lipgloss.Height(header) - lipgloss.Height(tabs)
-
-	sectionStyle := m.styles.Card.
-		Width(availableWidth).
-		Height(availableHeight)
-
+	// Build the content
 	var content strings.Builder
-	content.WriteString(m.styles.Title.Render(section.Title))
-	content.WriteString("\n\n")
 
-	// Render fields
+	// Section title with some padding
+	titleStyle := m.styles.Title.
+		MarginTop(1).
+		MarginBottom(1).
+		PaddingLeft(2)
+	content.WriteString(titleStyle.Render(section.Title))
+	content.WriteString("\n")
+
+	// Render fields with padding
 	for _, field := range section.Fields {
 		fieldView := m.renderField(field)
-		content.WriteString(fieldView)
-		content.WriteString("\n")
+		// Add left padding to fields
+		lines := strings.Split(fieldView, "\n")
+		for _, line := range lines {
+			if line != "" {
+				content.WriteString("  " + line + "\n")
+			}
+		}
 	}
 
-	builder.WriteString(sectionStyle.Render(content.String()))
+	// Count actual content lines
+	contentStr := content.String()
+	contentLines := strings.Count(contentStr, "\n")
 
-	return builder.String()
+	// Add empty lines to fill the available space
+	if availableHeight > contentLines {
+		for range availableHeight - contentLines - 1 {
+			content.WriteString("\n")
+		}
+	}
+
+	return content.String()
 }
 
 // renderField renders a single configuration field.
@@ -484,7 +642,26 @@ func (m *Config) saveConfig() tea.Cmd {
 // handleKeyMsg processes keyboard input messages.
 //
 
+//nolint:cyclop // Complex but necessary for handling various UI interactions
 func (m *Config) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle help modal toggle first
+	if msg.String() == "?" {
+		if m.helpModal != nil {
+			m.helpModal.Toggle()
+		}
+
+		return m, nil
+	}
+
+	// If help modal is visible, let it handle keys
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		if cmd := m.helpModal.Update(msg); cmd != nil {
+			return m, cmd
+		}
+		// Help modal consumed the key event
+		return m, nil
+	}
+
 	switch msg.String() {
 	case KeyCtrlC, "q", KeyEsc:
 		return m.handleQuitKeys(msg)
@@ -535,6 +712,11 @@ func (m *Config) handleTabNavigation(direction int) (tea.Model, tea.Cmd) {
 func (m *Config) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
+
+	// Update help modal size
+	if m.helpModal != nil {
+		m.helpModal.SetSize(msg.Width, msg.Height)
+	}
 
 	return m, nil
 }

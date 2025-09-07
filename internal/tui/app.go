@@ -194,7 +194,8 @@ func (a *App) View() string {
 	availableHeight := a.height - totalUsedHeight
 
 	// Center the content vertically by adding padding
-	if availableHeight > 0 {
+	// But NOT for AppsScreen which manages its own layout
+	if availableHeight > 0 && a.currentScreen != AppsScreen {
 		// Add padding to center the content
 		topPadding := availableHeight / 2
 		bottomPadding := availableHeight - topPadding
@@ -385,26 +386,14 @@ func (a *App) renderHeader() string {
 
 // shouldShowHeader determines if the current screen should show the header.
 func (a *App) shouldShowHeader() bool {
-	// AppsScreen handles its own header (both static title and search functionality)
-	switch a.currentScreen {
-	case ConfigScreen, ThemeScreen:
-		return true
-	case AppsScreen:
-		return false // AppsModel handles its own complete header
-	default:
-		return false
-	}
+	// All screens now handle their own headers
+	return false
 }
 
 // shouldShowFooter determines if the current screen should show the footer with navigation.
 func (a *App) shouldShowFooter() bool {
-	// Show footer on all main screens for universal navigation
-	switch a.currentScreen {
-	case AppsScreen, ConfigScreen, ThemeScreen, StatusScreen, HelpScreen:
-		return true
-	default:
-		return false
-	}
+	// All screens now handle their own footers
+	return false
 }
 
 // Search UI now handled by individual models (idiomatic pattern)

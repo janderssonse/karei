@@ -55,6 +55,9 @@ type Themes struct {
 	listViewport    viewport.Model
 	previewViewport viewport.Model
 	ready           bool
+
+	// Help modal
+	helpModal *HelpModal
 }
 
 // ThemesKeyMap defines key bindings for the themes screen.
@@ -371,6 +374,10 @@ func NewThemes(styleConfig *styles.Styles) *Themes {
 		},
 	}
 
+	// Create help modal
+	helpModal := NewHelpModal()
+	helpModal.SetScreen("themes")
+
 	return &Themes{
 		styles:        styleConfig,
 		themes:        themes,
@@ -379,7 +386,8 @@ func NewThemes(styleConfig *styles.Styles) *Themes {
 		showPreview:   true,
 		keyMap:        DefaultThemesKeyMap(),
 		// viewport initialized in handleWindowSizeMsg (idiomatic pattern)
-		ready: false,
+		ready:     false,
+		helpModal: helpModal,
 	}
 }
 
@@ -441,11 +449,44 @@ func (m *Themes) View() string {
 		return "Loading themes..."
 	}
 
+	// If help modal is visible, show it as an overlay
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		return m.renderWithModal()
+	}
+
+	return m.renderBaseView()
+}
+
+// renderWithModal renders the view with modal overlay.
+func (m *Themes) renderWithModal() string {
+	// Get modal view
+	modalView := m.helpModal.View()
+
+	// The idiomatic Bubble Tea approach: center the modal on a dark background
+	// This provides a clean modal experience without complex compositing
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		modalView,
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("235")), // Dark gray background
+	)
+}
+
+// renderBaseView renders the main themes view without overlays.
+func (m *Themes) renderBaseView() string {
 	// Build view components
 	var components []string
 
+	// Add clean header
+	header := m.renderCleanHeader()
+	components = append(components, header)
+
 	// Calculate remaining height for viewports
-	viewportHeight := m.height
+	headerHeight := lipgloss.Height(header)
+	footerHeight := 3 // Footer height (consistent with apps page)
+	viewportHeight := m.height - headerHeight - footerHeight - 1
 
 	// Render main content (split view or single column)
 	var mainContent string
@@ -484,8 +525,115 @@ func (m *Themes) View() string {
 
 	components = append(components, mainContent)
 
+	// Add clean footer
+	footer := m.renderCleanFooter()
+	components = append(components, footer)
+
 	// Compose all components
 	return lipgloss.JoinVertical(lipgloss.Top, components...)
+}
+
+// renderCleanHeader renders the new simplified header format.
+func (m *Themes) renderCleanHeader() string {
+	// Left side: App name » Current location
+	location := "Karei » Theme Selection"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
+
+	// Right side: Current theme name
+	status := ""
+
+	if m.cursor >= 0 && m.cursor < len(m.themes) {
+		currentTheme := m.themes[m.cursor]
+		if currentTheme.Current {
+			status = currentTheme.DisplayName + " (current)"
+		} else {
+			status = currentTheme.DisplayName
+		}
+	}
+
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
+
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
+}
+
+// renderCleanFooter renders the new simplified footer with context-aware actions.
+func (m *Themes) renderCleanFooter() string {
+	// Context-aware footer actions with styled keys and descriptions
+	var actions []string
+
+	// Styles for different parts (matching apps page)
+	keyStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Keys in primary color (blue)
+
+	bracketStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Brackets also in primary color
+
+	actionStyle := lipgloss.NewStyle().
+		Foreground(m.styles.Muted) // Actions in muted color
+
+	// Helper function to format action (same as apps page)
+	formatAction := func(key, action string) string {
+		return bracketStyle.Render("[") +
+			keyStyle.Render(key) +
+			bracketStyle.Render("]") +
+			" " +
+			actionStyle.Render(action)
+	}
+
+	// Theme selection actions
+	actions = []string{
+		formatAction("←→", "Choose"),
+		formatAction("Enter", "Apply"),
+		formatAction("Space", "Preview"),
+		formatAction("Esc", "Back"),
+	}
+
+	// Always add help with special styling (dim yellow to stand out)
+	helpKey := bracketStyle.Render("[") +
+		lipgloss.NewStyle().Bold(true).Foreground(m.styles.Warning).Render("?") +
+		bracketStyle.Render("]")
+	actions = append(actions, helpKey+" "+actionStyle.Render("Help"))
+
+	// Join actions with more spacing
+	footerText := strings.Join(actions, "   ")
+
+	// Style the footer container (exactly matching apps page)
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(footerText)
 }
 
 // GetSelectedTheme returns the theme at the current selection index.
@@ -580,26 +728,25 @@ func (m *Themes) renderColorDemoWithWidth(theme Theme, _ int) string {
 		{"Foreground", theme.Colors.Foreground},
 	}
 
-	// Build color palette
+	// Build color palette with larger, clearer hex values
 	rows := make([]string, 0, 9) // 7 colors + 2 headers
-	rows = append(rows, "Color Palette")
+	rows = append(rows, lipgloss.NewStyle().Bold(true).Render("Color Palette"))
 	rows = append(rows, "")
 
 	for _, color := range colors {
-		// Create the row with plain text alignment first
-		plainRow := fmt.Sprintf("    %-12s %s", color.name, color.value)
-
-		// Now apply the background color ONLY to the first 4 characters
-		// by splitting the string
+		// Create color swatch (wider for better visibility)
 		swatch := lipgloss.NewStyle().
 			Background(lipgloss.Color(color.value)).
-			Render("    ") // Just the swatch part
+			Render("      ") // 6 spaces for wider swatch
 
-		// The rest of the row (name + value)
-		rest := plainRow[4:] // Skip the first 4 chars we already rendered
+		// Format name and hex value with better spacing and emphasis
+		// Make hex value bold for better readability
+		nameAndValue := fmt.Sprintf(" %-10s %s",
+			color.name,
+			lipgloss.NewStyle().Bold(true).Render(color.value))
 
-		// Combine them
-		row := swatch + rest
+		// Combine swatch with formatted text
+		row := swatch + nameAndValue
 
 		rows = append(rows, row)
 	}
@@ -743,7 +890,26 @@ func (m *Themes) navigateToMenuCmd() tea.Cmd {
 // handleKeyMsg processes keyboard input for the themes screen.
 //
 
+//nolint:cyclop // Complex but necessary for handling various UI interactions
 func (m *Themes) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle help modal toggle first
+	if key.Matches(msg, m.keyMap.Help) {
+		if m.helpModal != nil {
+			m.helpModal.Toggle()
+		}
+
+		return m, nil
+	}
+
+	// If help modal is visible, let it handle keys
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		if cmd := m.helpModal.Update(msg); cmd != nil {
+			return m, cmd
+		}
+		// Help modal consumed the key event
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keyMap.Quit):
 		m.quitting = true
@@ -815,8 +981,16 @@ func (m *Themes) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	m.width = msg.Width
 	m.height = msg.Height
 
-	// Use the content height directly since main app already calculated content area
-	contentHeight := msg.Height
+	// Update help modal size
+	if m.helpModal != nil {
+		m.helpModal.SetSize(msg.Width, msg.Height)
+	}
+
+	// Calculate content height accounting for header and footer
+	headerHeight := 3 // Header height (consistent across pages)
+	footerHeight := 3 // Footer height (consistent across pages)
+
+	contentHeight := msg.Height - headerHeight - footerHeight
 	if contentHeight < 5 {
 		contentHeight = 5 // Minimum viable height
 	}

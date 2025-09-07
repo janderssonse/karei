@@ -28,6 +28,11 @@ import (
 // Constants for progress messages.
 const (
 	msgUninstallationComplete = "Uninstallation complete"
+
+	// UI layout constants.
+	maxProgressWidth        = 100
+	progressBarPadding      = 50
+	defaultProgressBarWidth = 50
 )
 
 // Error variables for static error definitions.
@@ -807,9 +812,9 @@ func (m *Progress) renderSingleTask(taskIndex int, task InstallTask) string {
 	}
 
 	// Update progress bar width dynamically
-	progressBarWidth := 50
-	if m.width > 100 {
-		progressBarWidth = m.width - 50
+	progressBarWidth := defaultProgressBarWidth
+	if m.width > maxProgressWidth {
+		progressBarWidth = m.width - progressBarPadding
 	}
 
 	progressBar.Width = progressBarWidth

@@ -10,14 +10,10 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os/exec"
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/janderssonse/karei/internal/stringutil"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -25,15 +21,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/janderssonse/karei/internal/apps"
 	"github.com/janderssonse/karei/internal/domain"
+	"github.com/janderssonse/karei/internal/stringutil"
 	"github.com/janderssonse/karei/internal/tui/styles"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Status indicators for applications.
 const (
-	StatusNotInstalled = "○"
-	StatusInstalled    = "●"
-	StatusSelected     = "✓"
-	StatusUninstall    = "✗"
+	StatusNotInstalled = " " // Empty space for unselected items
+	StatusInstalled    = "✓" // Checkmark for installed
+	StatusSelected     = "✓" // Checkmark for selected to install
+	StatusUninstall    = "✗" // X mark for pending removal
 	StatusPending      = "⋯" // Status pending/checking
 )
 
@@ -43,6 +42,10 @@ const (
 	FilterInstalled    = "Installed"
 	FilterNotInstalled = "Not Installed"
 	MethodAPTDisplay   = "apt"
+	MethodDEBDisplay   = "deb"
+	MethodFlatpak      = "flatpak"
+	MethodSnap         = "snap"
+	MethodMise         = "mise"
 )
 
 // SelectionState represents the intended operation for an application.
@@ -151,6 +154,9 @@ type AppsModel struct {
 	installStatusFilter string // "All", "Installed", "Not Installed"
 	packageTypeFilter   string // "All", "apt", "flatpak", "snap", "deb", "mise", "aqua", "github", "script"
 	sortOption          string // "Name", "Status", "Type", "Category"
+
+	// Help modal
+	helpModal *HelpModal
 }
 
 // category represents an internal category with navigation state.
@@ -167,6 +173,7 @@ type app struct {
 	Name          string
 	Description   string
 	Source        string
+	Version       string // Version if available
 	Installed     bool
 	Selected      bool
 	StatusPending bool // True when installation status is being checked
@@ -176,6 +183,12 @@ type app struct {
 type StatusUpdateMsg struct {
 	AppName   string
 	Installed bool
+}
+
+// VersionUpdateMsg carries version information from package manager queries.
+type VersionUpdateMsg struct {
+	AppKey  string
+	Version string
 }
 
 // RefreshStatusMsg triggers a refresh of all app installation statuses.
@@ -238,6 +251,7 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 				Name:          application.Name,
 				Description:   application.Description,
 				Source:        application.Source,
+				Version:       "", // Version will be populated by package manager queries
 				Installed:     application.Installed,
 				Selected:      false,
 				StatusPending: true, // Start with pending status, will be updated async
@@ -258,6 +272,11 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 		}
 	}
 
+	// Create help modal
+	helpModal := NewHelpModal()
+	helpModal.SetScreen("apps")
+	helpModal.SetSize(width, height)
+
 	model := &AppsModel{
 		styles:             styleConfig,
 		width:              width,
@@ -276,6 +295,9 @@ func NewAppsWithSize(ctx context.Context, styleConfig *styles.Styles, width, hei
 		installStatusFilter: "All",
 		packageTypeFilter:   "All",
 		sortOption:          "Name",
+
+		// Help modal
+		helpModal: helpModal,
 	}
 
 	return model
@@ -327,17 +349,17 @@ func DefaultAppsKeyMap() AppsKeyMap {
 func NewStatusCheckCommand(parentCtx context.Context, appName string, manager *apps.Manager) tea.Cmd {
 	return func() tea.Msg {
 		// Generous timeouts - since it's async, it won't block UI
-		timeout := 5 * time.Second // Default generous timeout
+		timeout := 10 * time.Second // Increased default timeout for reliability
 
 		// Get app to determine timeout based on method
 		if app, exists := apps.Apps[appName]; exists {
 			switch app.Method {
 			case domain.MethodBinary, domain.MethodMise, domain.MethodAqua:
-				timeout = 2 * time.Second // Binary checks should be fast
+				timeout = 5 * time.Second // Binary checks need more time
 			case domain.MethodAPT, domain.MethodDEB:
-				timeout = 3 * time.Second // APT needs time for dpkg
+				timeout = 10 * time.Second // APT can be slow
 			case domain.MethodFlatpak, domain.MethodSnap:
-				timeout = 5 * time.Second // These can be slow
+				timeout = 15 * time.Second // These are often very slow
 			}
 		}
 
@@ -352,6 +374,108 @@ func NewStatusCheckCommand(parentCtx context.Context, appName string, manager *a
 			Installed: installed,
 		}
 	}
+}
+
+// fetchAppVersion returns a command to fetch the version of an installed app.
+func fetchAppVersion(appKey, appName, source string) tea.Cmd {
+	return func() tea.Msg {
+		var version string
+
+		// Get version using simple command execution
+		cmd := getVersionCommand(appName, source)
+		if cmd != "" {
+			// Execute command with timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			// Use os/exec directly for simplicity
+			output, err := execCommand(ctx, "sh", "-c", cmd)
+			if err == nil && output != "" {
+				version = extractVersion(output, source)
+			}
+		}
+
+		return VersionUpdateMsg{
+			AppKey:  appKey,
+			Version: version,
+		}
+	}
+}
+
+// execCommand executes a command with context.
+func execCommand(ctx context.Context, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.Output()
+
+	return string(output), err
+}
+
+// getVersionCommand returns the appropriate command to get version info.
+// This is designed to be extensible and handle various package manager quirks.
+func getVersionCommand(appName, source string) string {
+	normalizedName := strings.ToLower(appName)
+
+	// Handle special case for mise
+	if source == MethodMise {
+		return getMiseVersionCommand(normalizedName)
+	}
+
+	// Map sources to their version commands
+	versionCommands := map[string]string{
+		MethodAPTDisplay: fmt.Sprintf("dpkg -s %s 2>/dev/null | grep '^Version:' | cut -d' ' -f2", appName),
+		MethodDEBDisplay: fmt.Sprintf("dpkg -s %s 2>/dev/null | grep '^Version:' | cut -d' ' -f2", appName),
+		MethodFlatpak:    fmt.Sprintf("flatpak info %s 2>/dev/null | grep 'Version:' | awk '{print $2}'", appName),
+		MethodSnap:       fmt.Sprintf("snap info %s 2>/dev/null | grep 'installed:' | awk '{print $2}'", normalizedName),
+		"aqua":           fmt.Sprintf("aqua list 2>/dev/null | grep -i '^%s\\s' | awk '{print $2}'", normalizedName),
+		"cargo":          fmt.Sprintf("cargo install --list | grep -E '^%s\\s' | awk '{print $2}' | tr -d '()'", normalizedName),
+		"npm":            fmt.Sprintf("npm list -g %s 2>/dev/null | grep %s@ | sed 's/.*@//'", normalizedName, normalizedName),
+		"yarn":           fmt.Sprintf("npm list -g %s 2>/dev/null | grep %s@ | sed 's/.*@//'", normalizedName, normalizedName),
+		"pnpm":           fmt.Sprintf("npm list -g %s 2>/dev/null | grep %s@ | sed 's/.*@//'", normalizedName, normalizedName),
+		"pip":            fmt.Sprintf("pip show %s 2>/dev/null | grep '^Version:' | awk '{print $2}'", normalizedName),
+		"pipx":           fmt.Sprintf("pip show %s 2>/dev/null | grep '^Version:' | awk '{print $2}'", normalizedName),
+	}
+
+	if cmd, exists := versionCommands[source]; exists {
+		return cmd
+	}
+
+	// Default: try common version flags
+	return fmt.Sprintf("which %s > /dev/null 2>&1 && %s --version 2>/dev/null | head -1", normalizedName, normalizedName)
+}
+
+// getMiseVersionCommand returns the version command for mise-managed tools.
+func getMiseVersionCommand(normalizedName string) string {
+	if normalizedName == MethodMise {
+		// Special case: mise itself uses --version
+		return "which mise > /dev/null 2>&1 && mise --version 2>/dev/null | head -1 | cut -d' ' -f1"
+	}
+	// For mise-managed tools: match tool name flexibly
+	// Tools can appear as "toolname", "aqua:org/toolname", "aqua:toolname"
+	return fmt.Sprintf("mise list 2>/dev/null | awk 'tolower($1) ~ /(^|[:/])%s$/ {print $2; exit}'", normalizedName)
+}
+
+// extractVersion extracts and cleans the version string.
+func extractVersion(output, source string) string {
+	version := strings.TrimSpace(output)
+
+	// Clean up debian version format (epoch:version-revision)
+	if source == MethodAPTDisplay || source == MethodDEBDisplay {
+		// Remove epoch
+		if idx := strings.Index(version, ":"); idx != -1 {
+			version = version[idx+1:]
+		}
+		// Remove debian revision if it's long
+		if idx := strings.Index(version, "-"); idx != -1 && idx > 5 {
+			version = version[:idx]
+		}
+	}
+
+	// Truncate if too long
+	if len(version) > 15 {
+		version = version[:12] + "..."
+	}
+
+	return version
 }
 
 // BatchStatusCheckMsg triggers the next batch of status checks.
@@ -380,7 +504,7 @@ func (m *AppsModel) checkVisibleAppsFirst() tea.Cmd {
 func (m *AppsModel) checkCategoryApps(_, batchIndex int) tea.Cmd {
 	// Only check ONE app at a time
 	// This is key: Bubble Tea runs commands in separate goroutines,
-	// so even if the check takes 5 seconds, it won't block the UI
+	// so even if the check takes time, it won't block the UI
 	var appToCheck string
 
 	found := false
@@ -423,78 +547,194 @@ func (m *AppsModel) Init() tea.Cmd {
 //
 
 // Update handles messages for the AppsModel.
+//
+//nolint:cyclop // Complex but necessary for handling various UI interactions
 func (m *AppsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Let viewport handle certain messages for scrolling
+	var viewportCmd tea.Cmd
+
+	shouldPassToViewport := false
+
+	// Check if this is a key that viewport should handle
+	if keyMsg, isKeyMsg := msg.(tea.KeyMsg); isKeyMsg {
+		switch keyMsg.String() {
+		case "pgup", "pgdown", "ctrl+u", "ctrl+d":
+			// These are viewport scrolling keys
+			shouldPassToViewport = true
+		}
+	} else if _, isMouseMsg := msg.(tea.MouseMsg); isMouseMsg {
+		// Mouse wheel events
+		shouldPassToViewport = true
+	}
+
+	if shouldPassToViewport {
+		m.viewport, viewportCmd = m.viewport.Update(msg)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		return m.handleWindowResize(msg)
+		model, cmd := m.handleWindowResize(msg)
+		return model, tea.Batch(cmd, viewportCmd)
 
 	case StatusUpdateMsg:
-		return m.handleStatusUpdate(msg)
+		model, cmd := m.handleStatusUpdate(msg)
+		return model, tea.Batch(cmd, viewportCmd)
+
+	case VersionUpdateMsg:
+		model, cmd := m.handleVersionUpdate(msg)
+		return model, tea.Batch(cmd, viewportCmd)
+
+	case SmoothScrollMsg:
+		// Handle smooth scrolling after navigation
+		m.ensureSelectionVisible()
+		return m, viewportCmd
 
 	case StartStatusCheckMsg:
 		// Start checking apps now that UI is ready
-		return m, m.checkCategoryApps(0, 0)
+		return m, tea.Batch(m.checkCategoryApps(0, 0), viewportCmd)
 
 	case BatchStatusCheckMsg:
 		// Continue checking the next batch of apps
-		return m, m.checkCategoryApps(m.currentCat, msg.BatchIndex)
+		return m, tea.Batch(m.checkCategoryApps(m.currentCat, msg.BatchIndex), viewportCmd)
 
 	case RefreshStatusMsg:
 		// Refresh all app statuses using batched approach
-		return m, m.startBatchedStatusCheck()
+		return m, tea.Batch(m.startBatchedStatusCheck(), viewportCmd)
 
 	case CompletedOperationsMsg:
 		// Handle immediate status updates from completed operations
 		m.handleCompletedOperations(msg.Operations)
 
-		return m, nil
+		return m, viewportCmd
 
 	case SearchUpdateMsg:
-		return m.handleSearchUpdate(msg)
+		m.searchActive = msg.Active
+		m.updateSearchQuery(msg.Query)
+
+		return m, viewportCmd
+
 	case FilterUpdateMsg:
-		return m.handleFilterUpdate(msg)
+		m.installStatusFilter = msg.InstallStatus
+		m.packageTypeFilter = msg.PackageType
+		m.sortOption = msg.SortOption
+
+		return m, viewportCmd
 
 	case tea.KeyMsg:
-		return m.handleKeyMessage(msg)
+		model, cmd := m.handleKeyMessage(msg)
+		return model, tea.Batch(cmd, viewportCmd)
 	}
 
-	return m, nil
+	return m, viewportCmd
 }
 
 // handleStatusUpdate handles status update messages.
+//
+//nolint:unparam // Cmd return is always nil but signature matches Update pattern
+func (m *AppsModel) handleVersionUpdate(msg VersionUpdateMsg) (tea.Model, tea.Cmd) {
+	// Update version for the app
+	for i := range m.categories {
+		for j := range m.categories[i].apps {
+			if m.categories[i].apps[j].Key == msg.AppKey {
+				m.categories[i].apps[j].Version = msg.Version
+				m.contentNeedsUpdate = true
+
+				return m, nil
+			}
+		}
+	}
+
+	return m, nil
+}
+
 func (m *AppsModel) handleStatusUpdate(msg StatusUpdateMsg) (tea.Model, tea.Cmd) {
 	m.updateAppStatus(msg.AppName, msg.Installed)
 
-	// Throttle content updates during batch status checking
-	if time.Since(m.lastViewportUpdate) > 100*time.Millisecond {
-		m.contentNeedsUpdate = true // Just mark for update, don't render here
-		m.lastViewportUpdate = time.Now()
-		m.statusUpdatePending = false
+	// No throttling - this is the idiomatic Bubble Tea way
+	// View() will be called automatically after Update()
+	// No need for flags or throttling
+
+	// If app is installed, fetch its version
+	var versionCmd tea.Cmd
+
+	// Special case: always check mise version since detection might be unreliable
+	if msg.AppName == MethodMise {
+		msg.Installed = true
 	}
 
-	return m, nil
-}
-
-// handleSearchUpdate handles search update messages.
-func (m *AppsModel) handleSearchUpdate(msg SearchUpdateMsg) (tea.Model, tea.Cmd) {
-	m.searchActive = msg.Active
-	m.updateSearchQuery(msg.Query)
-
-	return m, nil
-}
-
-// handleFilterUpdate handles filter update messages.
-func (m *AppsModel) handleFilterUpdate(msg FilterUpdateMsg) (tea.Model, tea.Cmd) {
-	m.installStatusFilter = msg.InstallStatus
-	m.packageTypeFilter = msg.PackageType
-	m.sortOption = msg.SortOption
-
-	// Re-apply search and filters to update display
-	if m.searchActive {
-		m.updateSearchQuery(m.searchQuery)
+	if msg.Installed {
+		versionCmd = m.createVersionFetchCommand(msg.AppName)
 	}
 
-	return m, nil
+	return m, versionCmd
+}
+
+// createVersionFetchCommand creates a command to fetch the version of an installed app.
+func (m *AppsModel) createVersionFetchCommand(appName string) tea.Cmd {
+	// Find the app to get its details
+	// appName contains the key (lowercase), not the display name
+	for _, cat := range m.categories {
+		for _, app := range cat.apps {
+			if app.Key == appName {
+				normalizedSource, toolIdentifier := m.detectAppSource(app)
+				return fetchAppVersion(app.Key, toolIdentifier, normalizedSource)
+			}
+		}
+	}
+
+	return nil
+}
+
+// detectAppSource determines the package manager and tool identifier for an app.
+func (m *AppsModel) detectAppSource(app app) (normalizedSource string, toolIdentifier string) {
+	toolIdentifier = app.Name // Default to display name
+
+	if catalogApp, exists := apps.Apps[app.Key]; exists {
+		// Use method-based detection for accurate package manager identification
+		normalizedSource, toolIdentifier = m.detectSourceFromMethod(catalogApp, app)
+	} else {
+		// No catalog entry - use heuristic detection
+		normalizedSource = getPackageTypeFromSource(app.Source)
+	}
+
+	return normalizedSource, toolIdentifier
+}
+
+// detectSourceFromMethod determines the source based on the catalog app's method.
+func (m *AppsModel) detectSourceFromMethod(catalogApp apps.App, app app) (normalizedSource string, toolIdentifier string) {
+	toolIdentifier = app.Name // Default
+
+	switch catalogApp.Method {
+	case domain.MethodMise:
+		return MethodMise, app.Key // Mise uses lowercase keys
+	case domain.MethodFlatpak:
+		return "flatpak", catalogApp.Source // Flatpak uses the source ID
+	case domain.MethodSnap:
+		return "snap", toolIdentifier
+	case domain.MethodAPT:
+		return MethodAPTDisplay, toolIdentifier
+	case domain.MethodDEB:
+		return MethodDEBDisplay, toolIdentifier
+	default:
+		// For other methods, check if source contains hints
+		return m.detectSourceFromHints(app.Source), toolIdentifier
+	}
+}
+
+// detectSourceFromHints detects the source from string hints.
+func (m *AppsModel) detectSourceFromHints(source string) string {
+	lowerSource := strings.ToLower(source)
+	switch {
+	case strings.Contains(lowerSource, "cargo"):
+		return "cargo"
+	case strings.Contains(lowerSource, "npm"):
+		return "npm"
+	case strings.Contains(lowerSource, "pip"):
+		return "pip"
+	default:
+		// Fall back to source-based detection
+		return getPackageTypeFromSource(source)
+	}
 }
 
 // handleWindowResize handles window resize messages.
@@ -502,21 +742,28 @@ func (m *AppsModel) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cm
 	m.width = msg.Width
 	m.height = msg.Height
 
-	searchHeader := m.renderSearchHeader()
-	headerComponents := []string{}
-
-	if searchHeader != "" {
-		headerComponents = append(headerComponents, searchHeader)
+	// Update help modal size
+	if m.helpModal != nil {
+		m.helpModal.SetSize(msg.Width, msg.Height)
 	}
 
-	totalHeaderHeight := 0
+	// Calculate header and footer heights for viewport
+	header := m.renderCleanHeader()
+	footer := m.renderCleanFooter()
 
-	if len(headerComponents) > 0 {
-		composed := lipgloss.JoinVertical(lipgloss.Left, headerComponents...)
-		totalHeaderHeight = lipgloss.Height(composed)
+	headerHeight := lipgloss.Height(header)
+	footerHeight := lipgloss.Height(footer)
+
+	// Reserve space for optional details panel
+	detailsHeight := 0
+	if m.height > 30 {
+		// Details panel: 3 lines content + 2 for border + 1 for margin = 6 total
+		detailsHeight = 6
 	}
 
-	viewportHeight := max(msg.Height-totalHeaderHeight, 1)
+	// Calculate viewport height (leave room for header, footer, and details)
+	// Add extra buffer to ensure header stays visible
+	viewportHeight := max(msg.Height-headerHeight-footerHeight-detailsHeight-2, 1)
 
 	if !m.ready {
 		m.viewport = viewport.New(msg.Width, viewportHeight)
@@ -527,6 +774,11 @@ func (m *AppsModel) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cm
 			return StartStatusCheckMsg{}
 		})
 	}
+
+	// Update existing viewport
+	m.viewport.Width = msg.Width
+	m.viewport.Height = viewportHeight
+	m.contentNeedsUpdate = true
 
 	return m, nil
 }
@@ -541,23 +793,74 @@ func (m *AppsModel) View() string {
 		return "Loading..."
 	}
 
+	// If help modal is visible, show it as an overlay
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		return m.renderWithModal()
+	}
+
+	return m.renderBaseView()
+}
+
+// renderWithModal renders the view with modal overlay.
+func (m *AppsModel) renderWithModal() string {
+	// Get modal view
+	modalView := m.helpModal.View()
+
+	// The idiomatic Bubble Tea approach: center the modal on a dark background
+	// This provides a clean modal experience without complex compositing
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		modalView,
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("235")), // Dark gray background
+	)
+}
+
+// renderBaseView renders the main application view without overlays.
+func (m *AppsModel) renderBaseView() string {
 	// Build the complete view: header + content + footer
 	components := []string{}
 
-	// Always show the search/filter header (as per TUI design)
-	searchHeader := m.renderSearchHeader()
-	if searchHeader != "" {
-		components = append(components, searchHeader)
+	// Add the new clean header - always show it
+	header := m.renderCleanHeader()
+	if header != "" {
+		components = append(components, header)
 	}
 
-	// Only update viewport content when actually needed
+	// Only update viewport content when necessary
 	if m.contentNeedsUpdate {
+		// Save current scroll position before updating content
+		currentOffset := m.viewport.YOffset
+
+		// Update content
 		m.viewport.SetContent(m.renderAllCategories())
 		m.contentNeedsUpdate = false
+
+		// Restore scroll position if in search mode (to prevent jumping)
+		if m.searchActive && !m.searchHasFocus {
+			m.viewport.SetYOffset(currentOffset)
+			// After restoring position, ensure selection is still visible
+			m.ensureSearchSelectionVisible()
+		}
 	}
 
 	// Add main content
 	components = append(components, m.viewport.View())
+
+	// Add details panel below main content if space allows
+	if m.height > 30 && len(m.categories) > 0 {
+		// Show compact details below
+		detailsPanel := m.renderCompactDetails()
+		if detailsPanel != "" {
+			components = append(components, detailsPanel)
+		}
+	}
+
+	// Add the new clean footer
+	footer := m.renderCleanFooter()
+	components = append(components, footer)
 
 	// Compose with Lipgloss
 	if len(components) == 1 {
@@ -565,6 +868,254 @@ func (m *AppsModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, components...)
+}
+
+// renderCleanHeader renders the new simplified header format: "Karei » Package Selection" with status.
+func (m *AppsModel) renderCleanHeader() string {
+	// If search is active, show search bar instead of normal header
+	if m.searchActive {
+		return m.renderSearchHeader()
+	}
+
+	// Left side: App name » Current location
+	location := "Karei » Package Selection"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
+
+	// Right side: Status (selected count)
+	selectedCount := 0
+
+	for _, state := range m.selected {
+		if state == StateInstall {
+			selectedCount++
+		}
+	}
+
+	status := ""
+	if selectedCount > 0 {
+		status = fmt.Sprintf("%d selected", selectedCount)
+	}
+
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
+
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4 // Account for padding
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
+}
+
+// renderSearchHeader renders the search bar in the header area.
+func (m *AppsModel) renderSearchHeader() string {
+	// Search prompt with query
+	searchPrompt := "/"
+	if m.searchHasFocus {
+		searchPrompt = lipgloss.NewStyle().
+			Foreground(m.styles.Primary).
+			Bold(true).
+			Render("/")
+	}
+
+	// Build search bar content
+	searchContent := fmt.Sprintf("%s %s", searchPrompt, m.searchQuery)
+
+	// Add cursor if search has focus
+	if m.searchHasFocus {
+		searchContent += lipgloss.NewStyle().
+			Foreground(m.styles.Primary).
+			Blink(true).
+			Render("█")
+	}
+
+	// Show match count on the right
+	matchInfo := ""
+	if len(m.filteredApps) > 0 {
+		matchInfo = fmt.Sprintf("%d matches", len(m.filteredApps))
+	} else if m.searchQuery != "" {
+		matchInfo = "No matches"
+	}
+
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(matchInfo)
+
+	// Calculate spacing
+	leftWidth := lipgloss.Width(searchContent)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := m.width - leftWidth - rightWidth - 4
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+	headerLine := searchContent + spacer + rightSide
+
+	// Style with search-specific border color
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(m.styles.Primary). // Highlight border when searching
+		Width(m.width).
+		Render(headerLine)
+}
+
+// renderCleanFooter renders the new simplified footer with 3-4 actions + help.
+func (m *AppsModel) renderCleanFooter() string {
+	// Context-aware footer actions with styled keys and descriptions
+	var actions []string
+
+	// Styles for different parts
+	keyStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Keys in primary color (blue)
+
+	bracketStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary) // Brackets also in primary color
+
+	actionStyle := lipgloss.NewStyle().
+		Foreground(m.styles.Muted) // Actions in muted color
+
+	// Helper function to format action
+	formatAction := func(key, action string) string {
+		return bracketStyle.Render("[") +
+			keyStyle.Render(key) +
+			bracketStyle.Render("]") +
+			" " +
+			actionStyle.Render(action)
+	}
+
+	if m.searchActive {
+		// Search mode actions
+		actions = []string{
+			formatAction("Enter", "Select"),
+			formatAction("Tab", "Results"),
+			formatAction("Esc", "Cancel"),
+		}
+	} else {
+		// Normal mode actions
+		actions = []string{
+			formatAction("Space", "Select"),
+			formatAction("Enter", "Install"),
+			formatAction("u", "Uninstall"),
+			formatAction("/", "Search"),
+		}
+	}
+
+	// Always add help with special styling (dim yellow to stand out)
+	helpKey := bracketStyle.Render("[") +
+		lipgloss.NewStyle().Bold(true).Foreground(m.styles.Warning).Render("?") +
+		bracketStyle.Render("]")
+	actions = append(actions, helpKey+" "+actionStyle.Render("Help"))
+
+	// Join actions with more spacing
+	footerText := strings.Join(actions, "   ")
+
+	// Style the footer container
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(footerText)
+}
+
+// renderCompactDetails renders a boxed 3-line details panel for the current app.
+func (m *AppsModel) renderCompactDetails() string {
+	// Get current app
+	if m.currentCat >= len(m.categories) {
+		return ""
+	}
+
+	cat := m.categories[m.currentCat]
+	if cat.currentApp >= len(cat.apps) {
+		return ""
+	}
+
+	app := cat.apps[cat.currentApp]
+
+	// Build status string
+	status := "Not installed"
+	statusColor := m.styles.MutedText
+
+	if app.Installed {
+		status = "Installed"
+		statusColor = m.styles.SuccessText
+	}
+
+	// Build three lines of content
+	lines := make([]string, 3)
+
+	// Line 1: Name and status
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(m.styles.Primary)
+	line1Left := nameStyle.Render(app.Name)
+
+	line1Right := statusColor.Render(status)
+	if app.Version != "" {
+		line1Right = fmt.Sprintf("v%s • %s", app.Version, line1Right)
+		line1Right = lipgloss.NewStyle().Foreground(m.styles.Muted).Render(line1Right)
+	}
+
+	// Calculate spacing for right alignment
+	// Match the EXACT content width of categories: 82 chars
+	// (indicator + space + name(22) + spaces(2) + desc(42) + spaces(2) + source(12))
+	const categoryContentWidth = 82
+
+	line1Width := categoryContentWidth
+
+	line1SpacerWidth := line1Width - lipgloss.Width(line1Left) - lipgloss.Width(line1Right)
+	if line1SpacerWidth < 1 {
+		line1SpacerWidth = 1
+	}
+
+	lines[0] = line1Left + strings.Repeat(" ", line1SpacerWidth) + line1Right
+
+	// Line 2: Description (truncate to fit)
+	descStyle := lipgloss.NewStyle().Foreground(m.styles.Muted)
+	truncatedDesc := truncate(app.Description, categoryContentWidth)
+	lines[1] = descStyle.Render(truncatedDesc)
+
+	// Line 3: Source and package type (truncate to fit)
+	sourceStyle := lipgloss.NewStyle().Foreground(m.styles.Muted)
+	sourceText := "Source: " + app.Source
+	truncatedSource := truncate(sourceText, categoryContentWidth)
+	lines[2] = sourceStyle.Render(truncatedSource)
+
+	// Join lines
+	content := strings.Join(lines, "\n")
+
+	// Style as a boxed panel - match category box styling
+	// No explicit width, same as categories
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1). // Same padding as categories
+		Render(content)
 }
 
 // CategoryForTesting represents a category structure for testing purposes.
@@ -610,9 +1161,27 @@ func (m *AppsModel) GetCategoriesForTesting() []CategoryForTesting {
 // Global navigation (quit, back, HJKL screen switching) is handled by main App.
 //
 
-//nolint:funcorder // Methods grouped logically by functionality
+//nolint:funcorder,cyclop // Methods grouped logically by functionality, complex but necessary
 func (m *AppsModel) handleKeyMessage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Handle search activation/deactivation first
+	// Handle help modal toggle first
+	if msg.String() == "?" {
+		if m.helpModal != nil {
+			m.helpModal.Toggle()
+		}
+
+		return m, nil
+	}
+
+	// If help modal is visible, let it handle keys
+	if m.helpModal != nil && m.helpModal.IsVisible() {
+		if cmd := m.helpModal.Update(msg); cmd != nil {
+			return m, cmd
+		}
+		// Help modal consumed the key event
+		return m, nil
+	}
+
+	// Handle search activation/deactivation
 	switch {
 	case msg.String() == "/":
 		// Activate search mode (idiomatic pattern - handle own search)
@@ -622,6 +1191,9 @@ func (m *AppsModel) handleKeyMessage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Initialize with all apps for empty query (default behavior)
 		m.updateSearchResults()
+
+		// Mark content for re-render to show search results
+		m.contentNeedsUpdate = true
 
 		// Return command to notify main app
 		return m, func() tea.Msg {
@@ -636,12 +1208,20 @@ func (m *AppsModel) handleKeyMessage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filteredApps = []app{}
 		m.searchSelection = -1
 
+		// Mark content for re-render to show categories again
+		m.contentNeedsUpdate = true
+
 		return m, func() tea.Msg {
 			return SearchDeactivatedMsg{PreserveQuery: false, Query: query}
 		}
 	}
 
-	// Handle search input when search field has focus
+	// Handle context switching with {/} (before search input to allow focus switching)
+	if cmd := m.handleContextSwitchKeys(msg); cmd != nil {
+		return m, cmd
+	}
+
+	// Handle search input when search field has focus (after context switching)
 	if m.searchActive && m.searchHasFocus {
 		return m, m.handleSearchInput(msg)
 	}
@@ -651,13 +1231,10 @@ func (m *AppsModel) handleKeyMessage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, installCmd
 	}
 
-	// Handle context switching with {/}
-	if cmd := m.handleContextSwitchKeys(msg); cmd != nil {
-		return m, cmd
-	}
-
 	// Handle navigation (j/k always work for up/down, {/} for context switch)
-	m.handleNavigationKeys(msg)
+	if navCmd := m.handleNavigationKeys(msg); navCmd != nil {
+		return m, navCmd
+	}
 
 	// Handle selection (only when not in search field)
 	if !m.searchActive || !m.searchHasFocus {
@@ -692,8 +1269,13 @@ func (m *AppsModel) renderAllCategories() string {
 
 // renderCategory renders a single category.
 func (m *AppsModel) renderCategory(cat category, isCurrent bool) string {
-	maxNameWidth, maxDescWidth := m.calculateColumnWidths(cat.apps)
-	appLines := m.renderAppLines(cat, isCurrent, maxNameWidth, maxDescWidth)
+	// Use FIXED widths for ALL categories to ensure vertical alignment
+	// Don't calculate per-category as that breaks alignment
+	const fixedNameWidth = 22
+
+	const fixedDescWidth = 42
+
+	appLines := m.renderAppLines(cat, isCurrent, fixedNameWidth, fixedDescWidth)
 
 	// Create simplified category title
 	categoryTitle := fmt.Sprintf("%s (%d)", cat.name, len(cat.apps))
@@ -715,24 +1297,28 @@ func (m *AppsModel) renderCategory(cat category, isCurrent bool) string {
 	return m.renderCategoryWithBorder(content, isCurrent)
 }
 
-// getAppIndicator returns the appropriate indicator for an app's state.
+// getAppIndicator returns the appropriate colored indicator for an app's state.
 func (m *AppsModel) getAppIndicator(app app, selectionState SelectionState) string {
 	switch selectionState {
 	case StateInstall:
-		return StatusSelected // ✓
+		// Blue checkmark for selected for installation
+		return m.styles.PrimaryText.Render("✓")
 	case StateUninstall:
-		return StatusUninstall // ✗
+		// Red X for selected for removal
+		return m.styles.ErrorText.Render("✗")
 	default:
 		// No selection - show install status
 		if app.StatusPending {
-			return StatusPending // ⋯ - status being checked
+			return m.styles.MutedText.Render("⋯") // Status being checked
 		}
 
 		if app.Installed {
-			return StatusInstalled // ●
+			// Green checkmark for already installed
+			return m.styles.SuccessText.Render("✓")
 		}
 
-		return StatusNotInstalled // ○
+		// Empty space for not installed
+		return " "
 	}
 }
 
@@ -756,8 +1342,7 @@ func (m *AppsModel) navigateDown() {
 		}
 	}
 
-	// Use Bubble Tea viewport's natural scrolling - no arithmetic
-	m.ensureSelectionVisible()
+	// Don't call ensureSelectionVisible here - let async command handle it
 }
 
 func (m *AppsModel) navigateUp() {
@@ -780,8 +1365,16 @@ func (m *AppsModel) navigateUp() {
 		}
 	}
 
-	// Use Bubble Tea viewport's natural scrolling - no arithmetic
-	m.ensureSelectionVisible()
+	// Don't call ensureSelectionVisible here - let async command handle it
+}
+
+// smoothScrollCommand returns a command that triggers smooth scrolling after navigation.
+// This decouples navigation from scrolling, making it async and smoother.
+func (m *AppsModel) smoothScrollCommand() tea.Cmd {
+	// Use a tiny delay to batch rapid navigation (like holding j/k)
+	return tea.Tick(time.Millisecond*10, func(_ time.Time) tea.Msg {
+		return SmoothScrollMsg{}
+	})
 }
 
 // navigateSearchDown navigates down in search results.
@@ -793,9 +1386,7 @@ func (m *AppsModel) navigateSearchDown() {
 	if m.searchSelection < len(m.filteredApps)-1 {
 		m.searchSelection++
 	}
-
-	// Use Bubble Tea viewport's natural scrolling - no arithmetic
-	m.ensureSearchSelectionVisible()
+	// Don't call ensureSearchSelectionVisible here - it's called after content update
 }
 
 // navigateSearchUp navigates up in search results.
@@ -807,9 +1398,7 @@ func (m *AppsModel) navigateSearchUp() {
 	if m.searchSelection > 0 {
 		m.searchSelection--
 	}
-
-	// Use Bubble Tea viewport's natural scrolling - no arithmetic
-	m.ensureSearchSelectionVisible()
+	// Don't call ensureSearchSelectionVisible here - it's called after content update
 }
 
 func (m *AppsModel) toggleInstallSelection() {
@@ -933,10 +1522,6 @@ func (m *AppsModel) handleSearchInput(msg tea.KeyMsg) tea.Cmd {
 		return m.handleBackspace()
 	case "enter":
 		return m.handleEnterInSearch()
-	case "{":
-		return m.handleUpFocus()
-	case "}":
-		return m.handleDownFocus()
 	default:
 		return m.handleCharacterInput(msg)
 	}
@@ -961,34 +1546,15 @@ func (m *AppsModel) handleEnterInSearch() tea.Cmd {
 		m.filteredApps = []app{}
 		m.searchSelection = -1
 
+		// Mark content for re-render to show categories again
+		m.contentNeedsUpdate = true
+
 		return func() tea.Msg {
 			return SearchDeactivatedMsg{PreserveQuery: true, Query: query}
 		}
 	}
 
 	return nil
-}
-
-func (m *AppsModel) handleUpFocus() tea.Cmd {
-	// { in search field: do nothing (can't go higher than search field)
-	return func() tea.Msg {
-		return ContextSwitchMsg{Direction: "up", Context: "search-input"}
-	}
-}
-
-func (m *AppsModel) handleDownFocus() tea.Cmd {
-	// } in search field: navigate down to search results
-	m.searchHasFocus = false
-	if len(m.filteredApps) > 0 {
-		// Go to search results
-		if m.searchSelection < 0 {
-			m.searchSelection = 0
-		}
-	}
-
-	return func() tea.Msg {
-		return ContextSwitchMsg{Direction: "down", Context: "search-input"}
-	}
 }
 
 func (m *AppsModel) handleCharacterInput(msg tea.KeyMsg) tea.Cmd {
@@ -1011,53 +1577,15 @@ func (m *AppsModel) updateSearchResults() {
 	if len(m.filteredApps) > 0 {
 		m.searchSelection = 0
 	}
+
+	// Mark content for re-render to show updated search results
+	m.contentNeedsUpdate = true
 }
 
 // renderNavigationHeader renders the top navigation bar that mirrors the footer.
 
 // renderSearchHeader renders the always-visible search/filter header bar.
-func (m *AppsModel) renderSearchHeader() string {
-	// Title line
-	title := "📦 Select Applications to Install"
-	titleLine := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(m.styles.Primary).
-		Render(title)
-
-	// Create search input field with enhanced visual feedback
-	searchField := m.renderSearchField()
-
-	// Add status and type filters, sort dropdown (matching the screenshot)
-	statusField := fmt.Sprintf("Status: [%s ▼]", m.installStatusFilter)
-	typeField := fmt.Sprintf("Type: [%s ▼]", m.packageTypeFilter)
-	sortField := fmt.Sprintf("Sort: [%s ▼]", m.sortOption)
-
-	// Combine search/filter elements on second line
-	controlsLine := fmt.Sprintf("%s  %s  %s  %s", searchField, statusField, typeField, sortField)
-
-	// Add search results info if search is active
-	if m.searchActive && m.searchQuery != "" {
-		if len(m.filteredApps) > 0 {
-			controlsLine += fmt.Sprintf("  (%d results)", len(m.filteredApps))
-		} else {
-			controlsLine += "  (no matches)"
-		}
-	}
-
-	// Combine title and controls with proper spacing
-	headerContent := lipgloss.JoinVertical(lipgloss.Left,
-		titleLine,
-		"",
-		controlsLine,
-	)
-
-	// Style the header with proper padding and border
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder(), false, false, true, false).
-		BorderForeground(m.styles.Primary).
-		Render(headerContent)
-}
+// Commented out - replaced by renderCleanHeader for new simplified design
 
 // ActivateSearchMsg signals the main app to activate search.
 type ActivateSearchMsg struct{}
@@ -1088,9 +1616,17 @@ func (m *AppsModel) handleUpContextSwitch() tea.Cmd {
 
 func (m *AppsModel) handleUpFromSearch() tea.Cmd {
 	if m.searchHasFocus {
-		// In search field: { does nothing (can't go higher)
+		// In search field: { wraps to search results (toggle behavior)
+		m.searchHasFocus = false
+		if len(m.filteredApps) > 0 {
+			// Go to search results
+			if m.searchSelection < 0 {
+				m.searchSelection = 0
+			}
+		}
+
 		return func() tea.Msg {
-			return ContextSwitchMsg{Direction: "up", Context: "search-field"}
+			return ContextSwitchMsg{Direction: "up", Context: "search-field-wrap"}
 		}
 	}
 
@@ -1145,11 +1681,11 @@ func (m *AppsModel) handleDownFromSearch() tea.Cmd {
 		}
 	}
 
-	// In search results: } goes back to search field (wrap around)
+	// In search results: } wraps back to search field (toggle behavior)
 	m.searchHasFocus = true
 
 	return func() tea.Msg {
-		return ContextSwitchMsg{Direction: "down", Context: "search-results"}
+		return ContextSwitchMsg{Direction: "down", Context: "search-results-wrap"}
 	}
 }
 
@@ -1169,14 +1705,24 @@ func (m *AppsModel) handleDownFromCategories() tea.Cmd {
 
 // handleNavigationKeys processes navigation key presses with viewport scrolling.
 // j/k work for both regular navigation and search results.
-func (m *AppsModel) handleNavigationKeys(msg tea.KeyMsg) {
+func (m *AppsModel) handleNavigationKeys(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.keyMap.Down), msg.String() == "j":
 		m.handleDownNavigation()
-		// Don't re-render everything! The View() method will handle it
+		// Only use smooth scroll for category navigation, not search
+		if !m.searchActive {
+			return m.smoothScrollCommand()
+		}
+
+		return nil
 	case key.Matches(msg, m.keyMap.Up), msg.String() == "k":
 		m.handleUpNavigation()
-		// Don't re-render everything! The View() method will handle it
+		// Only use smooth scroll for category navigation, not search
+		if !m.searchActive {
+			return m.smoothScrollCommand()
+		}
+
+		return nil
 	case key.Matches(msg, m.keyMap.PageDown), msg.String() == "J":
 		// Scroll viewport down (J key for page navigation)
 		m.viewport.ScrollDown(5)
@@ -1184,30 +1730,34 @@ func (m *AppsModel) handleNavigationKeys(msg tea.KeyMsg) {
 		// Scroll viewport up (K key for page navigation)
 		m.viewport.ScrollUp(5)
 	}
+
+	return nil
 }
 
 func (m *AppsModel) handleDownNavigation() {
 	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
 		// Navigate down in search results
 		m.navigateSearchDown()
+		// For search, content needs update since selection highlighting changes
+		m.contentNeedsUpdate = true
 	} else if !m.searchActive {
-		// Navigate down in regular categories (removed redundant check)
+		// Navigate down in regular categories
 		m.navigateDown()
+		// Don't update content for regular navigation - viewport handles scrolling
 	}
-
-	m.contentNeedsUpdate = true // Mark for re-render
 }
 
 func (m *AppsModel) handleUpNavigation() {
 	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
 		// Navigate up in search results
 		m.navigateSearchUp()
+		// For search, content needs update since selection highlighting changes
+		m.contentNeedsUpdate = true
 	} else if !m.searchActive {
-		// Navigate up in regular categories (removed redundant check)
+		// Navigate up in regular categories
 		m.navigateUp()
+		// Don't update content for regular navigation - viewport handles scrolling
 	}
-
-	m.contentNeedsUpdate = true // Mark for re-render
 }
 
 // handleSelectionKeys processes selection key presses.
@@ -1219,12 +1769,16 @@ func (m *AppsModel) handleSelectionKeys(msg tea.KeyMsg) {
 		} else {
 			m.toggleInstallSelection()
 		}
+
+		m.contentNeedsUpdate = true
 	case msg.String() == "d":
 		if m.searchActive && len(m.filteredApps) > 0 && m.searchSelection >= 0 {
 			m.markForUninstallForSearchResult()
 		} else {
 			m.markForUninstall()
 		}
+
+		m.contentNeedsUpdate = true
 	}
 }
 
@@ -1233,7 +1787,7 @@ func (m *AppsModel) updateAppStatus(appName string, installed bool) {
 	// Fast O(1) lookup instead of O(n²) search
 	if app, exists := m.appLookup[appName]; exists {
 		app.Installed = installed
-		app.StatusPending = false // Status check completed
+		app.StatusPending = false // ALWAYS clear pending state to prevent stuck "..."
 
 		// Clear selection state after any status update
 		delete(m.selected, appName)
@@ -1257,20 +1811,20 @@ func (m *AppsModel) ensureSelectionVisible() {
 	viewportBottom := viewportTop + m.viewport.Height - 1
 
 	// Buffer zones - scroll when selection gets close to edges
-	topBuffer := 6    // Keep 6 lines above selection visible (very aggressive upward scrolling)
-	bottomBuffer := 3 // Keep 3 lines below selection visible (for category borders)
+	topBuffer := 3    // Keep 3 lines above selection visible
+	bottomBuffer := 3 // Keep 3 lines below selection visible
 
 	// Check if selection is outside comfortable viewing area
-	if selectionLine <= viewportTop+topBuffer {
-		// Selection too close to top - scroll up to maintain buffer
+	if selectionLine < viewportTop+topBuffer {
+		// Selection too close to top - scroll up smoothly
 		newOffset := selectionLine - topBuffer
 		if newOffset < 0 {
 			newOffset = 0
 		}
 
 		m.viewport.SetYOffset(newOffset)
-	} else if selectionLine >= viewportBottom-bottomBuffer {
-		// Selection too close to bottom - scroll down to maintain buffer
+	} else if selectionLine > viewportBottom-bottomBuffer {
+		// Selection too close to bottom - scroll down smoothly
 		newOffset := selectionLine - m.viewport.Height + bottomBuffer + 1
 		totalLines := m.viewport.TotalLineCount()
 
@@ -1335,17 +1889,22 @@ func (m *AppsModel) ensureSearchSelectionVisible() {
 
 // calculateSearchSelectionLine calculates exact line position of search selection.
 func (m *AppsModel) calculateSearchSelectionLine() int {
-	// Start with search results header
-	// Title line: "── Search Results for 'query' ── [N matches] ──"
-	line := 1 // Title line
+	// Account for the box border and padding structure:
+	// Line 0: Top border ╭──────╮
+	// Line 1: Padding (empty)
+	// Line 2: Title "Search Results (N matches)"
+	// Line 3: Empty line after title
+	// Line 4+: Search result items
+	// ...
+	// Line N: Padding (empty)
+	// Line N+1: Bottom border ╰──────╯
+	line := 0
+	line++ // Top border
+	line++ // Top padding
+	line++ // Title line
+	line++ // Empty line after title
 
-	// Empty line after title
-	line++ // Empty line
-
-	// Border top and padding from the border style (1 line for padding)
-	line++ // Border/padding
-
-	// Each search result is one line, so selection is at position m.searchSelection
+	// Add the selection position
 	line += m.searchSelection
 
 	return line
@@ -1585,52 +2144,70 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// calculateColumnWidths determines the maximum width for name and description columns.
-func (m *AppsModel) calculateColumnWidths(apps []app) (int, int) {
-	maxNameWidth := 0
-	maxDescWidth := 0
-
-	for _, app := range apps {
-		nameLen := len(app.Name)
-		descLen := len(app.Description)
-
-		if nameLen > maxNameWidth {
-			maxNameWidth = nameLen
-		}
-
-		if descLen > maxDescWidth {
-			maxDescWidth = descLen
-		}
-	}
-
-	return maxNameWidth, maxDescWidth
-}
-
 // renderAppLines creates formatted lines for all apps in a category.
-func (m *AppsModel) renderAppLines(cat category, isCurrent bool, _, _ int) []string {
+func (m *AppsModel) renderAppLines(cat category, isCurrent bool, nameWidth, descWidth int) []string {
 	appLines := make([]string, 0, len(cat.apps))
 
-	// Define fixed column widths for better alignment
-	const (
-		nameWidth = 20
-		descWidth = 40
-	)
+	// Fixed source column width for alignment
+	const sourceWidth = 12 // Wide enough for "github-java" and others
 
 	for appIdx, app := range cat.apps {
 		indicator := m.getAppIndicator(app, m.selected[app.Key])
 
-		// Format with fixed-width columns and truncation
-		line := fmt.Sprintf("%s %-20s  %-40s  [%s]",
-			indicator,
-			truncate(app.Name, nameWidth),
-			truncate(app.Description, descWidth),
-			app.Source)
+		// Build the line with EXACT formatting for alignment
+		// Format: [I] NAME........ DESCRIPTION............          SOURCE
+		// Where I = indicator (1 char), followed by space
 
-		// Highlight current app in current category
+		// Ensure indicator is always 1 character
+		if indicator == " " {
+			indicator = " " // Single space
+		}
+
+		// Format the main content with fixed widths
+		name := truncate(app.Name, nameWidth)
+		desc := truncate(app.Description, descWidth)
+
+		// Build main content (indicator + name + description)
+		mainContent := fmt.Sprintf("%s %-*s  %-*s",
+			indicator,
+			nameWidth, name,
+			descWidth, desc)
+
+		// Right-align source in a fixed-width column
+		// This ensures all sources align regardless of their length
+		source := app.Source
+		if len(source) > sourceWidth {
+			source = truncate(source, sourceWidth)
+		}
+
+		// Format source to be right-aligned within sourceWidth
+		sourceFormatted := fmt.Sprintf("%*s", sourceWidth, source)
+
+		// Build complete line with consistent spacing
+		dimmedSource := m.styles.MutedText.Render(sourceFormatted)
+
+		// Fixed spacing between description and source
+		const gapBeforeSource = 2
+
+		line := mainContent + strings.Repeat(" ", gapBeforeSource) + dimmedSource
+
+		// Apply highlighting if this is the current selection
 		if isCurrent && appIdx == cat.currentApp {
-			line = m.styles.Selected.Render(line)
-		} else {
-			line = m.styles.Unselected.Render(line)
+			// Use a more subtle highlight - not bold, just slightly brighter
+			highlightStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("248")) // Subtle gray-white for dim highlight
+
+			// Keep the indicator separate so it maintains its color
+			// but highlight the rest of the line
+			highlightedContent := fmt.Sprintf("%-*s  %-*s",
+				nameWidth, name,
+				descWidth, desc)
+
+			highlightedMain := highlightStyle.Render(highlightedContent)
+
+			// Reconstruct the line with original indicator but highlighted content
+			line = fmt.Sprintf("%s %s", indicator, highlightedMain) +
+				strings.Repeat(" ", gapBeforeSource) + dimmedSource
 		}
 
 		appLines = append(appLines, line)
@@ -1669,52 +2246,7 @@ func (m *AppsModel) GetSearchQuery() string {
 }
 
 // renderSearchField renders the search input field with visual feedback.
-func (m *AppsModel) renderSearchField() string {
-	if !m.searchActive {
-		// Inactive search field
-		searchText := strings.Repeat("_", 15)
-
-		return fmt.Sprintf("Search: [%s] 🔍", searchText)
-	}
-
-	// Active search field with query
-	searchText := m.searchQuery
-
-	padding := 15 - len(searchText)
-	if padding > 0 {
-		searchText += strings.Repeat("_", padding)
-	} else if len(searchText) > 15 {
-		// Truncate long queries with ellipsis
-		searchText = searchText[:12] + "..."
-	}
-
-	// Add cursor when search field has focus
-	if m.searchHasFocus {
-		// Replace last underscore with cursor
-		if strings.HasSuffix(searchText, "_") {
-			searchText = searchText[:len(searchText)-1] + "│" // Vertical bar cursor
-		} else {
-			searchText += "│"
-		}
-	}
-
-	// Apply styling based on focus state
-	searchStyle := lipgloss.NewStyle()
-	if m.searchHasFocus {
-		// Focused: highlighted background
-		searchStyle = searchStyle.
-			Background(m.styles.Secondary).
-			Foreground(lipgloss.Color("#1a1b26")).
-			Bold(true)
-	} else if m.searchActive {
-		// Active but not focused: subtle highlight
-		searchStyle = searchStyle.
-			Foreground(m.styles.Primary).
-			Bold(false)
-	}
-
-	return fmt.Sprintf("Search: [%s] 🔍", searchStyle.Render(searchText))
-}
+// Commented out - search field now part of footer actions in new design
 
 // GetSelectionStateForTesting returns the selection state for a given app key (for testing).
 func (m *AppsModel) GetSelectionStateForTesting(appKey string) (SelectionState, bool) {
@@ -1916,40 +2448,85 @@ func (m *AppsModel) renderSearchResults() string {
 		return fmt.Sprintf("No apps found matching '%s'", m.searchQuery)
 	}
 
-	// Create a title
-	title := fmt.Sprintf("── Search Results for '%s' ── [%d matches] ──", m.searchQuery, len(m.filteredApps))
+	// Create a title that looks like a category header
+	title := fmt.Sprintf("Search Results (%d matches)", len(m.filteredApps))
 	styledTitle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(m.styles.Primary).
 		Render(title)
 
-	// Calculate column widths for search results
-	maxNameWidth, maxDescWidth := m.calculateSearchResultWidths(m.filteredApps)
+	// Use FIXED column widths matching category view for consistency
+	// These match the exact widths used in renderAppLines
+	const (
+		nameWidth            = 22 // Fixed name column width
+		descWidth            = 42 // Fixed description column width
+		sourceWidth          = 12 // Fixed source column width
+		categoryContentWidth = 82 // Total content width matching details panel
+	)
 
-	// Render search results as a flat list
+	// Render search results with same styling as category items
 	appLines := make([]string, 0, len(m.filteredApps))
 	for appIndex, app := range m.filteredApps {
 		indicator := m.getAppIndicator(app, m.selected[app.Key])
 
-		// Format with aligned columns: [indicator] [name] [description] [source]
-		line := fmt.Sprintf("%s %-*s  %-*s  %s",
-			indicator,
-			maxNameWidth, app.Name,
-			maxDescWidth, app.Description,
-			app.Source)
-
-		// Apply styling - highlight the selected search result
-		var styledLine string
-		if appIndex == m.searchSelection {
-			styledLine = m.styles.Selected.Render(line)
-		} else {
-			styledLine = m.styles.Unselected.Render(line)
+		// Ensure indicator is always 1 character
+		if indicator == " " {
+			indicator = " "
 		}
 
-		appLines = append(appLines, styledLine)
+		// Format the main content with fixed widths (same as category items)
+		name := truncate(app.Name, nameWidth)
+		desc := truncate(app.Description, descWidth)
+
+		// Build main content (indicator + name + description)
+		mainContent := fmt.Sprintf("%s %-*s  %-*s",
+			indicator,
+			nameWidth, name,
+			descWidth, desc)
+
+		// Right-align source in a fixed-width column
+		source := app.Source
+		if len(source) > sourceWidth {
+			source = truncate(source, sourceWidth)
+		}
+
+		// Format source to be right-aligned within sourceWidth
+		sourceFormatted := fmt.Sprintf("%*s", sourceWidth, source)
+
+		// Build complete line with consistent spacing
+		dimmedSource := m.styles.MutedText.Render(sourceFormatted)
+
+		// Fixed spacing between description and source
+		const gapBeforeSource = 2
+
+		line := mainContent + strings.Repeat(" ", gapBeforeSource) + dimmedSource
+
+		// Apply highlighting if this is the current selection (same as category items)
+		if appIndex == m.searchSelection {
+			// Use a more subtle highlight - not bold, just slightly brighter
+			highlightStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("248")) // Subtle gray-white for dim highlight
+
+			// Keep the indicator separate so it maintains its color
+			// but highlight the rest of the line
+			highlightedContent := fmt.Sprintf("%-*s  %-*s",
+				nameWidth, name,
+				descWidth, desc)
+
+			highlightedMain := highlightStyle.Render(highlightedContent)
+
+			// Reconstruct the line with original indicator but highlighted content
+			line = fmt.Sprintf("%s %s%s%s",
+				indicator,
+				highlightedMain,
+				strings.Repeat(" ", gapBeforeSource),
+				dimmedSource)
+		}
+
+		appLines = append(appLines, line)
 	}
 
-	// Compose the complete search view
+	// Compose the complete search view (similar to category layout)
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		styledTitle,
@@ -1957,33 +2534,14 @@ func (m *AppsModel) renderSearchResults() string {
 		lipgloss.JoinVertical(lipgloss.Left, appLines...),
 	)
 
-	// Wrap in a border for consistency
+	// Wrap in a box similar to the details panel for consistency
+	// This ensures the search results have the same visual treatment
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.styles.Primary).
-		Padding(1).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1).                         // Same padding as details panel
+		MaxWidth(categoryContentWidth + 4). // Content width + padding + borders
 		Render(content)
-}
-
-// calculateSearchResultWidths determines column widths for search results.
-func (m *AppsModel) calculateSearchResultWidths(apps []app) (int, int) {
-	maxNameWidth := 0
-	maxDescWidth := 0
-
-	for _, app := range apps {
-		nameLen := len(app.Name)
-		descLen := len(app.Description)
-
-		if nameLen > maxNameWidth {
-			maxNameWidth = nameLen
-		}
-
-		if descLen > maxDescWidth {
-			maxDescWidth = descLen
-		}
-	}
-
-	return maxNameWidth, maxDescWidth
 }
 
 // passesInstallStatusFilter checks if app passes the installation status filter.

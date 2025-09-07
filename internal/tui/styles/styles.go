@@ -30,6 +30,13 @@ type Styles struct {
 	Unselected lipgloss.Style
 	Border     lipgloss.Style
 
+	// Text styles (cached for performance)
+	MutedText   lipgloss.Style
+	PrimaryText lipgloss.Style
+	SuccessText lipgloss.Style
+	ErrorText   lipgloss.Style
+	WarningText lipgloss.Style
+
 	// Layout styles
 	Container lipgloss.Style
 	Content   lipgloss.Style
@@ -106,6 +113,22 @@ func New() *Styles {
 		Border: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(primary),
+
+		// Cached text styles
+		MutedText: lipgloss.NewStyle().
+			Foreground(muted),
+
+		PrimaryText: lipgloss.NewStyle().
+			Foreground(primary),
+
+		SuccessText: lipgloss.NewStyle().
+			Foreground(success),
+
+		ErrorText: lipgloss.NewStyle().
+			Foreground(errorColor),
+
+		WarningText: lipgloss.NewStyle().
+			Foreground(warning),
 
 		Container: lipgloss.NewStyle().
 			Padding(1, 2),

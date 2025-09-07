@@ -230,14 +230,36 @@ func (m *Manager) IsAppInstalled(ctx context.Context, name string) bool {
 
 	// Use the appropriate identifier for each method
 	identifier := name
-	if app.Method == domain.MethodFlatpak {
+
+	switch app.Method {
+	case domain.MethodFlatpak:
 		// For Flatpak, use the Source field which contains the Flatpak ID
 		identifier = app.Source
+	case domain.MethodMise:
+		// For Mise, use the lowercase key since mise commands are case-sensitive
+		// The catalog uses capitalized Names but mise needs lowercase
+		identifier = name // 'name' here is the key from the catalog which is lowercase
 	}
 
+	// Use the more efficient IsInstalledByMethod that only checks the specific method
+	// This is MUCH faster than checking all methods sequentially
+	type methodChecker interface {
+		IsInstalledByMethod(ctx context.Context, name string, method domain.InstallMethod) (bool, error)
+	}
+
+	if checker, ok := m.packageInstaller.(methodChecker); ok {
+		installed, err := checker.IsInstalledByMethod(ctx, identifier, app.Method)
+		if err != nil {
+			// This should rarely happen - only for real errors
+			return false
+		}
+
+		return installed
+	}
+
+	// Fallback to the old method if IsInstalledByMethod is not available
 	installed, err := m.packageInstaller.IsInstalled(ctx, identifier)
 	if err != nil {
-		// Log error but don't fail - return false as fallback
 		return false
 	}
 
