@@ -191,13 +191,13 @@ func TestHelpModalView(t *testing.T) {
 		screens := map[string][]string{
 			"apps": {
 				"Space", "Toggle selection",
-				"Enter", "Install selected packages",
+				"Enter", "Install/uninstall selected",
 				"/", "Search packages",
 			},
 			"themes": {
-				"←→", "Browse themes",
+				"j/k", "Navigate theme list",
 				"Enter", "Apply selected theme",
-				"p", "Preview theme",
+				"?", "Show this help",
 			},
 			"settings": {
 				"Tab", "Switch setting sections",

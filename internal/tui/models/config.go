@@ -228,7 +228,7 @@ func NewConfig(styleConfig *styles.Styles) *Config {
 
 	// Create help modal
 	helpModal := NewHelpModal()
-	helpModal.SetScreen("settings")
+	helpModal.SetScreen("config")
 
 	return &Config{
 		styles:     styleConfig,

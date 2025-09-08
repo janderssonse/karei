@@ -62,43 +62,33 @@ type Themes struct {
 
 // ThemesKeyMap defines key bindings for the themes screen.
 type ThemesKeyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Select  key.Binding
-	Preview key.Binding
-	Apply   key.Binding
-	Variant key.Binding
-	Back    key.Binding
-	Help    key.Binding
-	Quit    key.Binding
+	Up     key.Binding
+	Down   key.Binding
+	Select key.Binding
+	Apply  key.Binding
+	Back   key.Binding
+	Help   key.Binding
+	Quit   key.Binding
 }
 
 // DefaultThemesKeyMap returns the default key bindings.
 func DefaultThemesKeyMap() ThemesKeyMap {
 	return ThemesKeyMap{
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "move up"),
+			key.WithKeys("k"),
+			key.WithHelp("k", "move up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "move down"),
+			key.WithKeys("j"),
+			key.WithHelp("j", "move down"),
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "select theme"),
 		),
-		Preview: key.NewBinding(
-			key.WithKeys("p"),
-			key.WithHelp("p", "toggle preview"),
-		),
 		Apply: key.NewBinding(
 			key.WithKeys("a"),
 			key.WithHelp("a", "apply theme"),
-		),
-		Variant: key.NewBinding(
-			key.WithKeys("v"),
-			key.WithHelp("v", "change variant"),
 		),
 		Back: key.NewBinding(
 			key.WithKeys("esc"),
@@ -542,36 +532,8 @@ func (m *Themes) renderCleanHeader() string {
 		Foreground(m.styles.Primary).
 		Render(location)
 
-	// Right side: Current theme name
-	status := ""
-
-	if m.cursor >= 0 && m.cursor < len(m.themes) {
-		currentTheme := m.themes[m.cursor]
-		if currentTheme.Current {
-			status = currentTheme.DisplayName + " (current)"
-		} else {
-			status = currentTheme.DisplayName
-		}
-	}
-
-	rightSide := lipgloss.NewStyle().
-		Foreground(m.styles.Muted).
-		Render(status)
-
-	// Calculate spacing
-	totalWidth := m.width
-	leftWidth := lipgloss.Width(leftSide)
-	rightWidth := lipgloss.Width(rightSide)
-	spacerWidth := totalWidth - leftWidth - rightWidth - 4
-
-	if spacerWidth < 1 {
-		spacerWidth = 1
-	}
-
-	spacer := strings.Repeat(" ", spacerWidth)
-
-	// Combine with spacing
-	headerLine := leftSide + spacer + rightSide
+	// Simple header without dynamic content
+	headerLine := leftSide
 
 	// Style the header with subtle border
 	return lipgloss.NewStyle().
@@ -586,13 +548,13 @@ func (m *Themes) renderCleanHeader() string {
 // renderCleanFooter renders the new simplified footer with context-aware actions.
 func (m *Themes) renderCleanFooter() string {
 	actions := []FooterAction{
-		{Key: "←→", Action: "Choose"},
+		{Key: "j/k", Action: "Navigate"},
 		{Key: "Enter", Action: "Apply"},
-		{Key: "Space", Action: "Preview"},
+		{Key: "?", Action: "Help"},
 		{Key: "Esc", Action: "Back"},
 	}
 
-	return RenderFooter(m.styles, m.width, actions, true)
+	return RenderFooter(m.styles, m.width, actions, false)
 }
 
 // GetSelectedTheme returns the theme at the current selection index.
@@ -882,13 +844,8 @@ func (m *Themes) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleCursorMovement(1)
 	case key.Matches(msg, m.keyMap.Select):
 		return m.handleThemeSelection()
-	case key.Matches(msg, m.keyMap.Preview):
-		return m.handlePreviewToggle()
 	case key.Matches(msg, m.keyMap.Apply):
 		return m, m.applyTheme()
-	case key.Matches(msg, m.keyMap.Variant):
-		// Cycle through theme variants (requires state tracking for current variant)
-		return m, nil
 	}
 
 	// Don't forward key messages to viewports here - they're already handled in Update()
@@ -918,17 +875,6 @@ func (m *Themes) handleCursorMovement(direction int) (tea.Model, tea.Cmd) {
 
 func (m *Themes) handleThemeSelection() (tea.Model, tea.Cmd) {
 	m.selectedTheme = m.cursor
-
-	return m, nil
-}
-
-// handlePreviewToggle toggles the preview display.
-//
-
-func (m *Themes) handlePreviewToggle() (tea.Model, tea.Cmd) {
-	m.showPreview = !m.showPreview
-	// Update viewport content when preview state changes (idiomatic pattern)
-	m.updateViewportContent()
 
 	return m, nil
 }

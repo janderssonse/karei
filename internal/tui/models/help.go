@@ -778,18 +778,51 @@ func (m *Help) handleWindowSizeMsg(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// renderHeader creates the header with section navigation.
+// renderHeader creates the header with clean style matching other screens.
 func (m *Help) renderHeader() string {
-	var builder strings.Builder
+	// Left side: App name » Current location
+	location := "Karei » Help"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
 
-	// Title
-	title := m.styles.Title.Render("❓ Help & Documentation")
-	builder.WriteString(title)
-	builder.WriteString("\n")
+	// Right side: Current section
+	status := ""
+	if m.currentSection < len(m.sections) {
+		status = m.sections[m.currentSection].Title
+	}
 
-	// Section tabs
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
+
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4 // Account for padding
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border
+	header := lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
+
+	// Add section tabs below the header
 	tabs := make([]string, 0, len(m.sections))
-
 	for i, section := range m.sections {
 		var style lipgloss.Style
 		if i == m.currentSection {
@@ -806,10 +839,11 @@ func (m *Help) renderHeader() string {
 		tabs = append(tabs, style.Render(section.Title))
 	}
 
-	tabsLine := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
-	builder.WriteString(tabsLine)
+	tabsLine := lipgloss.NewStyle().
+		Padding(0, 2).
+		Render(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
 
-	return builder.String()
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabsLine)
 }
 
 // NOTE: This is kept for compatibility but not used - app.go handles the universal footer.

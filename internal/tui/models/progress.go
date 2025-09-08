@@ -582,65 +582,104 @@ func (m *Progress) getFailureMessage(operation, errorMsg string) string {
 	return " installation failed: " + errorMsg
 }
 
-// renderHeader creates the header.
+// renderHeader creates the header with clean style matching other screens.
 func (m *Progress) renderHeader() string {
-	installCount, uninstallCount := m.getOperationCounts()
+	// Get location and status
+	location := m.getHeaderLocation()
+	status := m.getHeaderStatus()
 
-	title := m.getProgressTitle(installCount, uninstallCount)
-	subtitle := m.getProgressSubtitle(installCount, uninstallCount)
+	// Style left side
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
 
-	titleStyled := m.styles.Title.Render(title)
-	subtitleStyled := m.styles.Subtitle.Render(subtitle)
+	// Style right side
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
 
-	return lipgloss.JoinVertical(lipgloss.Left, titleStyled, subtitleStyled)
+	// Calculate spacing
+	spacerWidth := m.width - lipgloss.Width(leftSide) - lipgloss.Width(rightSide) - 4
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	// Combine with spacing
+	headerLine := leftSide + strings.Repeat(" ", spacerWidth) + rightSide
+
+	// Style with border
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
 }
 
-// getProgressTitle returns the appropriate title based on progress state.
-func (m *Progress) getProgressTitle(installCount, uninstallCount int) string {
+// getHeaderLocation returns the location text for the header.
+func (m *Progress) getHeaderLocation() string {
+	if m.completed {
+		return "Karei » Operations Complete"
+	}
+
+	installCount, uninstallCount := m.getOperationCounts()
+	if uninstallCount > 0 && installCount == 0 {
+		return "Karei » Uninstalling Applications"
+	}
+
+	if installCount > 0 && uninstallCount > 0 {
+		return "Karei » Processing Applications"
+	}
+
+	return "Karei » Installing Applications"
+}
+
+// getHeaderStatus returns the status text for the header.
+func (m *Progress) getHeaderStatus() string {
 	switch {
 	case m.completed:
-		return m.getCompletedTitle(installCount, uninstallCount)
+		return m.getCompletedStatus()
 	case m.paused:
-		return "⏸ Operations Paused"
+		return "Paused"
 	default:
-		return m.getActiveTitle(installCount, uninstallCount)
+		return m.getProgressStatus()
 	}
 }
 
-// getCompletedTitle returns the title for completed operations.
-func (m *Progress) getCompletedTitle(installCount, uninstallCount int) string {
-	switch {
-	case installCount > 0 && uninstallCount > 0:
-		return "✓ Operations Complete"
-	case uninstallCount > 0:
-		return "✓ Uninstallation Complete"
-	default:
-		return "✓ Installation Complete"
+// getCompletedStatus returns status for completed operations.
+func (m *Progress) getCompletedStatus() string {
+	successCount := 0
+	failedCount := 0
+
+	for _, task := range m.tasks {
+		switch task.Status {
+		case TaskStatusCompleted:
+			successCount++
+		case TaskStatusFailed:
+			failedCount++
+		}
 	}
+
+	if failedCount > 0 {
+		return fmt.Sprintf("%d succeeded, %d failed", successCount, failedCount)
+	}
+
+	return fmt.Sprintf("%d succeeded", successCount)
 }
 
-// getActiveTitle returns the title for active operations.
-func (m *Progress) getActiveTitle(installCount, uninstallCount int) string {
-	switch {
-	case installCount > 0 && uninstallCount > 0:
-		return "⚬ Processing Applications"
-	case uninstallCount > 0:
-		return "⚬ Uninstalling Applications"
-	default:
-		return "⚬ Installing Applications"
-	}
-}
+// getProgressStatus returns status for in-progress operations.
+func (m *Progress) getProgressStatus() string {
+	completed := 0
 
-// getProgressSubtitle returns the subtitle showing operation counts.
-func (m *Progress) getProgressSubtitle(installCount, uninstallCount int) string {
-	switch {
-	case installCount > 0 && uninstallCount > 0:
-		return fmt.Sprintf("Installing %d, uninstalling %d applications", installCount, uninstallCount)
-	case uninstallCount > 0:
-		return fmt.Sprintf("Uninstalling %d applications", uninstallCount)
-	default:
-		return fmt.Sprintf("Installing %d applications", installCount)
+	for _, task := range m.tasks {
+		if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
+			completed++
+		}
 	}
+
+	return fmt.Sprintf("%d/%d tasks", completed, len(m.tasks))
 }
 
 // renderProgress creates the combined progress display with border title.
@@ -968,27 +1007,27 @@ func (m *Progress) wrapLogLines(displayLogs []string, maxContentWidth, available
 	return wrappedLines
 }
 
-// renderFooter creates the footer with keybindings.
+// renderFooter creates the footer with clean style matching other screens.
 func (m *Progress) renderFooter() string {
-	var keybindings []string
+	var actions []FooterAction
 
 	if !m.completed {
 		if m.paused {
-			keybindings = append(keybindings, m.styles.Keybinding("p", "resume"))
+			actions = append(actions, FooterAction{Key: "p", Action: "Resume"})
 		} else {
-			keybindings = append(keybindings, m.styles.Keybinding("p", "pause"))
+			actions = append(actions, FooterAction{Key: "p", Action: "Pause"})
 		}
 
-		keybindings = append(keybindings, m.styles.Keybinding("l", "logs"))
-		keybindings = append(keybindings, m.styles.Keybinding("q", "cancel"))
+		actions = append(actions, FooterAction{Key: "l", Action: "Logs"})
+		actions = append(actions, FooterAction{Key: "q", Action: "Cancel"})
 	} else {
-		keybindings = append(keybindings, m.styles.Keybinding("esc", "back"))
-		keybindings = append(keybindings, m.styles.Keybinding("q", "quit"))
+		actions = append(actions, FooterAction{Key: "Enter", Action: "Continue"})
+		actions = append(actions, FooterAction{Key: "Esc", Action: "Back"})
+		actions = append(actions, FooterAction{Key: "q", Action: "Quit"})
 	}
 
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
+	// Use the shared RenderFooter function for consistency
+	return RenderFooter(m.styles, m.width, actions, false) // No help button during installation
 }
 
 // getStatusIcon returns the appropriate icon for a task status.

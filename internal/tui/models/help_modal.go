@@ -158,35 +158,32 @@ func (h *HelpModal) getCommandsForScreen(screen string) []HelpModalSection {
 				Title: "Navigation",
 				Commands: []HelpModalCommand{
 					{"j/k or ↑↓", "Navigate items"},
-					{"h/l or ←→", "Switch categories"},
-					{"g/G", "Go to top/bottom"},
-					{"PgUp/PgDn", "Page up/down"},
+					{"g/G", "Jump to first/last item"},
+					{"{/}", "Switch categories"},
+					{"H/L", "Switch screens (left/right)"},
+					{"J/K", "Page up/down"},
 				},
 			},
 			{
 				Title: "Selection",
 				Commands: []HelpModalCommand{
 					{"Space", "Toggle selection"},
-					{"a", "Select all in category"},
-					{"A", "Deselect all"},
+					{"d", "Mark for uninstall"},
 				},
 			},
 			{
 				Title: "Actions",
 				Commands: []HelpModalCommand{
-					{"Enter", "Install selected packages"},
+					{"Enter", "Install/uninstall selected"},
 					{"/", "Search packages"},
-					{"p", "Preview package details"},
-					{"v", "Show package variants"},
-					{"r", "Refresh package list"},
 				},
 			},
 			{
 				Title: "General",
 				Commands: []HelpModalCommand{
-					{"Tab", "Switch sections"},
-					{"Esc", "Go back"},
+					{"Esc", "Go back/cancel search"},
 					{"q", "Quit application"},
+					{"?", "Show this help"},
 				},
 			},
 		}
@@ -196,35 +193,33 @@ func (h *HelpModal) getCommandsForScreen(screen string) []HelpModalSection {
 			{
 				Title: "Navigation",
 				Commands: []HelpModalCommand{
-					{"←→ or h/l", "Browse themes"},
-					{"j/k or ↑↓", "Navigate theme list"},
+					{"j/k", "Navigate theme list"},
 				},
 			},
 			{
 				Title: "Actions",
 				Commands: []HelpModalCommand{
 					{"Enter", "Apply selected theme"},
-					{"p or Space", "Preview theme"},
-					{"r", "Reset to default"},
 				},
 			},
 			{
 				Title: "General",
 				Commands: []HelpModalCommand{
-					{"Tab", "Switch sections"},
 					{"Esc", "Go back"},
 					{"q", "Quit application"},
+					{"?", "Show this help"},
 				},
 			},
 		}
 
-	case "settings", "preferences":
+	case "settings", "preferences", "config":
 		return []HelpModalSection{
 			{
 				Title: "Navigation",
 				Commands: []HelpModalCommand{
 					{"Tab", "Switch setting sections"},
 					{"j/k or ↑↓", "Navigate settings"},
+					{"H/L", "Switch screens (left/right)"},
 				},
 			},
 			{
@@ -253,6 +248,7 @@ func (h *HelpModal) getCommandsForScreen(screen string) []HelpModalSection {
 				Commands: []HelpModalCommand{
 					{"j/k or ↑↓", "Scroll log"},
 					{"g/G", "Go to top/bottom"},
+					{"H/L", "Switch screens (left/right)"},
 				},
 			},
 			{
@@ -279,6 +275,7 @@ func (h *HelpModal) getCommandsForScreen(screen string) []HelpModalSection {
 				Commands: []HelpModalCommand{
 					{"j/k or ↑↓", "Navigate menu"},
 					{"Enter", "Select option"},
+					{"H/L", "Switch screens (left/right)"},
 				},
 			},
 			{

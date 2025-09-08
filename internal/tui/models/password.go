@@ -303,14 +303,44 @@ func (m *PasswordPrompt) handlePasswordValidationResult(msg PasswordValidationRe
 	return m, nil
 }
 
-// renderHeader creates the header with lock icon and title.
+// renderHeader creates the header with clean style matching other screens.
 func (m *PasswordPrompt) renderHeader() string {
-	title := "🔒 Administrator Authentication Required"
-	titleStyled := m.styles.Title.Foreground(m.styles.Warning).Bold(true).Render(title)
+	// Left side: App name » Current location
+	location := "Karei » Authentication"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Primary).
+		Render(location)
 
-	subtitle := m.styles.Subtitle.Render("Enter your password to continue")
+	// Right side: Status
+	status := "🔒 Required"
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Warning).
+		Render(status)
 
-	return lipgloss.JoinVertical(lipgloss.Left, titleStyled, subtitle)
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4 // Account for padding
+
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color("240")).
+		Width(m.width).
+		Render(headerLine)
 }
 
 // renderContent creates the main content area with password input.
@@ -392,15 +422,14 @@ func (m *PasswordPrompt) renderContent() string {
 	return m.styles.Card.Render(builder.String())
 }
 
-// renderFooter creates the footer with keybindings.
+// renderFooter creates the footer with clean style matching other screens.
 func (m *PasswordPrompt) renderFooter() string {
-	keybindings := []string{
-		m.styles.Keybinding("enter", "confirm"),
-		m.styles.Keybinding("esc", "cancel"),
-		m.styles.Keybinding("backspace", "delete"),
+	actions := []FooterAction{
+		{Key: "Enter", Action: "Confirm"},
+		{Key: "Esc", Action: "Cancel"},
+		{Key: "Backspace", Action: "Delete"},
 	}
 
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
+	// Use the shared RenderFooter function for consistency
+	return RenderFooter(m.styles, m.width, actions, false) // No help button for password screen
 }

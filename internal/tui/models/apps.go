@@ -1368,6 +1368,43 @@ func (m *AppsModel) navigateUp() {
 	// Don't call ensureSelectionVisible here - let async command handle it
 }
 
+// jumpToFirst jumps to the first app in the first category (vim g key).
+func (m *AppsModel) jumpToFirst() {
+	if len(m.categories) == 0 {
+		return
+	}
+
+	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
+		// In search results, jump to first result
+		m.searchSelection = 0
+		m.contentNeedsUpdate = true
+	} else if !m.searchActive {
+		// Jump to first app in first category
+		m.currentCat = 0
+		m.categories[0].currentApp = 0
+		m.contentNeedsUpdate = true
+	}
+}
+
+// jumpToLast jumps to the last app in the last category (vim G key).
+func (m *AppsModel) jumpToLast() {
+	if len(m.categories) == 0 {
+		return
+	}
+
+	if m.searchActive && !m.searchHasFocus && len(m.filteredApps) > 0 {
+		// In search results, jump to last result
+		m.searchSelection = len(m.filteredApps) - 1
+		m.contentNeedsUpdate = true
+	} else if !m.searchActive {
+		// Jump to last app in last category
+		m.currentCat = len(m.categories) - 1
+		lastCat := &m.categories[m.currentCat]
+		lastCat.currentApp = len(lastCat.apps) - 1
+		m.contentNeedsUpdate = true
+	}
+}
+
 // smoothScrollCommand returns a command that triggers smooth scrolling after navigation.
 // This decouples navigation from scrolling, making it async and smoother.
 func (m *AppsModel) smoothScrollCommand() tea.Cmd {
@@ -1729,6 +1766,14 @@ func (m *AppsModel) handleNavigationKeys(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keyMap.PageUp), msg.String() == "K":
 		// Scroll viewport up (K key for page navigation)
 		m.viewport.ScrollUp(5)
+	case msg.String() == "g":
+		// Jump to first app (vim style)
+		m.jumpToFirst()
+		return m.smoothScrollCommand()
+	case msg.String() == "G":
+		// Jump to last app (vim style)
+		m.jumpToLast()
+		return m.smoothScrollCommand()
 	}
 
 	return nil

@@ -369,38 +369,59 @@ func (m *ErrorScreen) View() string {
 	return builder.String()
 }
 
-// renderHeader creates the header with error type and icon.
+// renderHeader creates the header with clean style matching other screens.
 func (m *ErrorScreen) renderHeader() string {
-	var (
-		icon, title string
-		titleStyle  lipgloss.Style
-	)
+	// Left side: App name » Current location
+	location := "Karei » Error"
+	leftSide := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.styles.Error). // Use error color for error screen
+		Render(location)
+
+	// Right side: Error type with icon
+	var icon string
 
 	switch m.error.Type {
 	case ErrorNetwork:
 		icon = "🌐"
-		titleStyle = lipgloss.NewStyle().Foreground(m.styles.Warning)
 	case ErrorPermission:
 		icon = "🔒"
-		titleStyle = lipgloss.NewStyle().Foreground(m.styles.Error)
 	case ErrorInstallation:
 		icon = "📦"
-		titleStyle = lipgloss.NewStyle().Foreground(m.styles.Error)
 	case ErrorConfiguration:
 		icon = "⚙️"
-		titleStyle = lipgloss.NewStyle().Foreground(m.styles.Warning)
 	default:
 		icon = "❌"
-		titleStyle = lipgloss.NewStyle().Foreground(m.styles.Error)
 	}
 
-	title = fmt.Sprintf("%s %s", icon, m.error.Title)
-	styledTitle := titleStyle.Bold(true).Render(title)
+	status := fmt.Sprintf("%s %s", icon, m.error.GetErrorType())
+	rightSide := lipgloss.NewStyle().
+		Foreground(m.styles.Muted).
+		Render(status)
 
-	timestamp := m.error.Timestamp.Format("2006-01-02 15:04:05")
-	subtitle := m.styles.Subtitle.Render("Occurred at: " + timestamp)
+	// Calculate spacing
+	totalWidth := m.width
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+	spacerWidth := totalWidth - leftWidth - rightWidth - 4 // Account for padding
 
-	return lipgloss.JoinVertical(lipgloss.Left, styledTitle, subtitle)
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	// Combine with spacing
+	headerLine := leftSide + spacer + rightSide
+
+	// Style the header with subtle border (use error color for border)
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(m.styles.Error). // Error color for border
+		Width(m.width).
+		Render(headerLine)
 }
 
 // renderErrorDisplay creates the main error information display.
@@ -472,21 +493,21 @@ func (m *ErrorScreen) renderErrorDisplay() string {
 	return builder.String()
 }
 
-// renderFooter creates the footer with keybindings.
+// renderFooter creates the footer with clean style matching other screens.
 func (m *ErrorScreen) renderFooter() string {
-	var keybindings []string
+	var actions []FooterAction
 
 	if m.error.Recoverable {
-		keybindings = append(keybindings, m.styles.Keybinding("r/enter", "retry"))
+		actions = append(actions, FooterAction{Key: "Enter", Action: "Retry"})
 	}
 
-	keybindings = append(keybindings, m.styles.Keybinding("?", "help"))
-	keybindings = append(keybindings, m.styles.Keybinding("esc", "back"))
-	keybindings = append(keybindings, m.styles.Keybinding("q", "quit"))
+	actions = append(actions,
+		FooterAction{Key: "Esc", Action: "Back"},
+		FooterAction{Key: "q", Action: "Quit"},
+	)
 
-	footer := strings.Join(keybindings, "  ")
-
-	return m.styles.Footer.Render(footer)
+	// Use the shared RenderFooter function for consistency, include help
+	return RenderFooter(m.styles, m.width, actions, true)
 }
 
 // GetErrorType returns a human-readable error type string.
